@@ -95,12 +95,12 @@ link_changed (NMDevice *device, NMPlatformLink *info)
 }
 
 static void
-setup (NMDevice *device, NMPlatformLink *plink)
+setup_start (NMDevice *device, NMPlatformLink *plink)
 {
 	NMDeviceTun *self = NM_DEVICE_TUN (device);
 	NMDeviceTunPrivate *priv = NM_DEVICE_TUN_GET_PRIVATE (self);
 
-	NM_DEVICE_CLASS (nm_device_tun_parent_class)->setup (device, plink);
+	NM_DEVICE_CLASS (nm_device_tun_parent_class)->setup_start (device, plink);
 
 	priv->mode = NULL;
 	if (plink->type == NM_LINK_TYPE_TUN)
@@ -210,7 +210,7 @@ nm_device_tun_class_init (NMDeviceTunClass *klass)
 	object_class->set_property = set_property;
 
 	device_class->link_changed = link_changed;
-	device_class->setup = setup;
+	device_class->setup_start = setup_start;
 	device_class->unrealize = unrealize;
 
 	/* properties */
