@@ -180,6 +180,8 @@ nm_device_gre_class_init (NMDeviceGreClass *klass)
 
 	g_type_class_add_private (klass, sizeof (NMDeviceGrePrivate));
 
+	NM_DEVICE_CLASS_DECLARE_TYPES (klass, NULL, NM_LINK_TYPE_GRE, NM_LINK_TYPE_GRETAP)
+
 	object_class->constructed = constructed;
 	object_class->get_property = get_property;
 

@@ -1644,20 +1644,69 @@ link_changed (NMDevice *self, NMPlatformLink *info)
 		nm_device_set_carrier (self, info->connected);
 }
 
+static gboolean
+link_type_compatible (NMDevice *self,
+                      NMLinkType link_type,
+                      gboolean *out_compatible,
+                      GError **error)
+{
+	NMDeviceClass *klass = NM_DEVICE_GET_CLASS (self);
+	guint i = 0;
+
+	if (!klass->link_types) {
+		NM_SET_OUT (out_compatible, FALSE);
+		g_set_error_literal (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_FAILED,
+		                     "Device does not support platform links");
+		return FALSE;
+	}
+
+	for (i = 0; klass->link_types[i] > NM_LINK_TYPE_UNKNOWN; i++) {
+		if (klass->link_types[i] == link_type)
+			return TRUE;
+		if (klass->link_types[i] == NM_LINK_TYPE_ANY)
+			return TRUE;
+	}
+
+	NM_SET_OUT (out_compatible, FALSE);
+	g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_FAILED,
+	             "Device does not support platform link type 0x%X",
+	             link_type);
+	return FALSE;
+}
+
 /**
  * nm_device_realize():
  * @self: the #NMDevice
  * @plink: an existing platform link or %NULL
+ * @out_compatible: %TRUE on return if @self is compatible with @plink
  * @error: location to store error, or %NULL
  *
  * Initializes and sets up the device using existing backing resources. Before
  * the device is ready for use nm_device_setup_finish() must be called.
+ * @out_compatible will only be set if @plink is not %NULL, and
  *
  * Returns: %TRUE on success, %FALSE on error
  */
 gboolean
-nm_device_realize (NMDevice *self, NMPlatformLink *plink, GError **error)
+nm_device_realize (NMDevice *self,
+                   NMPlatformLink *plink,
+                   gboolean *out_compatible,
+                   GError **error)
 {
+	NM_SET_OUT (out_compatible, TRUE);
+
+	if (plink) {
+		if (g_strcmp0 (nm_device_get_iface (self), plink->name) != 0) {
+			NM_SET_OUT (out_compatible, FALSE);
+			g_set_error_literal (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_FAILED,
+			                     "Device interface name does not match platform link");
+			return FALSE;
+		}
+
+		if (!link_type_compatible (self, plink->type, out_compatible, error))
+			return FALSE;
+	}
+
 	/* Try to realize the device from existing resources */
 	if (NM_DEVICE_GET_CLASS (self)->realize) {
 		if (!NM_DEVICE_GET_CLASS (self)->realize (self, plink, error))
@@ -1776,7 +1825,7 @@ setup_start (NMDevice *self, NMPlatformLink *plink)
 	g_object_freeze_notify (G_OBJECT (self));
 
 	if (plink) {
-		g_return_if_fail (priv->iface == NULL || strcmp (plink->name, priv->iface) == 0);
+		g_return_if_fail (link_type_compatible (self, plink->type, NULL, NULL));
 		update_device_from_platform_link (self, plink);
 	}
 
@@ -1881,6 +1930,8 @@ setup_finish (NMDevice *self, NMPlatformLink *plink)
 void
 nm_device_setup_finish (NMDevice *self, NMPlatformLink *plink)
 {
+	g_return_if_fail (!plink || link_type_compatible (self, plink->type, NULL, NULL));
+
 	NM_DEVICE_GET_CLASS (self)->setup_finish (self, plink);
 
 	NM_DEVICE_GET_PRIVATE (self)->real = TRUE;
@@ -10053,6 +10104,7 @@ set_property (GObject *object, guint prop_id,
 	const char *hw_addr, *p;
 	guint count;
 	gboolean val_bool;
+	int ifindex;
 
 	switch (prop_id) {
 	case PROP_UDI:
@@ -10065,9 +10117,17 @@ set_property (GObject *object, guint prop_id,
 		if (g_value_get_string (value)) {
 			g_free (priv->iface);
 			priv->iface = g_value_dup_string (value);
-			priv->ifindex = nm_platform_link_get_ifindex (NM_PLATFORM_GET, priv->iface);
-			if (priv->ifindex > 0)
-				priv->up = nm_platform_link_is_up (NM_PLATFORM_GET, priv->ifindex);
+
+			ifindex = nm_platform_link_get_ifindex (NM_PLATFORM_GET, priv->iface);
+			if (ifindex > 0) {
+				NMLinkType link_type = nm_platform_link_get_type (NM_PLATFORM_GET, ifindex);
+
+				g_return_if_fail (link_type > NM_LINK_TYPE_UNKNOWN);
+				if (link_type_compatible (self, link_type, NULL, NULL)) {
+					priv->ifindex = ifindex;
+					priv->up = nm_platform_link_is_up (NM_PLATFORM_GET, priv->ifindex);
+				}
+			}
 		}
 		break;
 	case PROP_DRIVER:
