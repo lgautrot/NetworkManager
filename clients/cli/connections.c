@@ -7636,7 +7636,7 @@ property_edit_submenu (NmCli *nmc,
 	/* Set global variable for use in TAB completion */
 	nmc_tab_completion.property = prop_name;
 
-	prompt = nmc_colorize (nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
+	prompt = nmc_colorize (nmc, nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
 	                       "nmcli %s.%s> ",
 	                       nm_setting_get_name (curr_setting), prop_name);
 
@@ -7964,13 +7964,14 @@ typedef	struct {
 } NmcEditorMenuContext;
 
 static void
-menu_switch_to_level0 (NmcEditorMenuContext *menu_ctx,
+menu_switch_to_level0 (NmCli *nmc,
+                       NmcEditorMenuContext *menu_ctx,
                        const char *prompt,
                        NmcTermColor prompt_color)
 {
 	menu_ctx->level = 0;
 	g_free (menu_ctx->main_prompt);
-	menu_ctx->main_prompt = nmc_colorize (prompt_color, NMC_TERM_FORMAT_NORMAL, "%s", prompt);
+	menu_ctx->main_prompt = nmc_colorize (nmc, prompt_color, NMC_TERM_FORMAT_NORMAL, "%s", prompt);
 	menu_ctx->curr_setting = NULL;
 	g_strfreev (menu_ctx->valid_props);
 	menu_ctx->valid_props = NULL;
@@ -7979,14 +7980,15 @@ menu_switch_to_level0 (NmcEditorMenuContext *menu_ctx,
 }
 
 static void
-menu_switch_to_level1 (NmcEditorMenuContext *menu_ctx,
+menu_switch_to_level1 (NmCli *nmc,
+                       NmcEditorMenuContext *menu_ctx,
                        NMSetting *setting,
                        const char *setting_name,
                        NmcTermColor prompt_color)
 {
 	menu_ctx->level = 1;
 	g_free (menu_ctx->main_prompt);
-	menu_ctx->main_prompt = nmc_colorize (prompt_color, NMC_TERM_FORMAT_NORMAL,
+	menu_ctx->main_prompt = nmc_colorize (nmc, prompt_color, NMC_TERM_FORMAT_NORMAL,
 	                                      "nmcli %s> ", setting_name);
 	menu_ctx->curr_setting = setting;
 	g_strfreev (menu_ctx->valid_props);
@@ -8021,7 +8023,7 @@ editor_menu_main (NmCli *nmc, NMConnection *connection, const char *connection_t
 	g_print (_("You may edit the following settings: %s\n"), valid_settings_str);
 
 	menu_ctx.level = 0;
-	menu_ctx.main_prompt = nmc_colorize (nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
+	menu_ctx.main_prompt = nmc_colorize (nmc, nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
 	                                     BASE_PROMPT);
 	menu_ctx.curr_setting = NULL;
 	menu_ctx.valid_props = NULL;
@@ -8180,7 +8182,7 @@ editor_menu_main (NmCli *nmc, NMConnection *connection, const char *connection_t
 				nmc_tab_completion.setting = setting;
 
 				/* Switch to level 1 */
-				menu_switch_to_level1 (&menu_ctx, setting, setting_name, nmc->editor_prompt_color);
+				menu_switch_to_level1 (nmc, &menu_ctx, setting, setting_name, nmc->editor_prompt_color);
 
 				if (!cmd_arg_s) {
 					g_print (_("You may edit the following properties: %s\n"), menu_ctx.valid_props_str);
@@ -8254,7 +8256,7 @@ editor_menu_main (NmCli *nmc, NMConnection *connection, const char *connection_t
 					connection_remove_setting (connection, ss);
 					if (ss == menu_ctx.curr_setting) {
 						/* If we removed the setting we are in, go up */
-						menu_switch_to_level0 (&menu_ctx, BASE_PROMPT, nmc->editor_prompt_color);
+						menu_switch_to_level0 (nmc, &menu_ctx, BASE_PROMPT, nmc->editor_prompt_color);
 						nmc_tab_completion.setting = NULL;  /* for TAB completion */
 					}
 				} else {
@@ -8277,7 +8279,7 @@ editor_menu_main (NmCli *nmc, NMConnection *connection, const char *connection_t
 							/* coverity[copy_paste_error] - suppress Coverity COPY_PASTE_ERROR defect */
 							if (ss == menu_ctx.curr_setting) {
 								/* If we removed the setting we are in, go up */
-								menu_switch_to_level0 (&menu_ctx, BASE_PROMPT, nmc->editor_prompt_color);
+								menu_switch_to_level0 (nmc, &menu_ctx, BASE_PROMPT, nmc->editor_prompt_color);
 								nmc_tab_completion.setting = NULL;  /* for TAB completion */
 							}
 						} else
@@ -8619,7 +8621,7 @@ editor_menu_main (NmCli *nmc, NMConnection *connection, const char *connection_t
 		case NMC_EDITOR_MAIN_CMD_BACK:
 			/* Go back (up) an the menu */
 			if (menu_ctx.level == 1) {
-				menu_switch_to_level0 (&menu_ctx, BASE_PROMPT, nmc->editor_prompt_color);
+				menu_switch_to_level0 (nmc, &menu_ctx, BASE_PROMPT, nmc->editor_prompt_color);
 				nmc_tab_completion.setting = NULL;  /* for TAB completion */
 			}
 			break;
@@ -8665,10 +8667,10 @@ editor_menu_main (NmCli *nmc, NMConnection *connection, const char *connection_t
 					nmc->editor_prompt_color = color;
 					g_free (menu_ctx.main_prompt);
 					if (menu_ctx.level == 0)
-						menu_ctx.main_prompt = nmc_colorize (nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
+						menu_ctx.main_prompt = nmc_colorize (nmc, nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
 						                                     BASE_PROMPT);
 					else
-						menu_ctx.main_prompt = nmc_colorize (nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
+						menu_ctx.main_prompt = nmc_colorize (nmc, nmc->editor_prompt_color, NMC_TERM_FORMAT_NORMAL,
 						                                     "nmcli %s> ",
 						                                     nm_setting_get_name (menu_ctx.curr_setting));
 				}
