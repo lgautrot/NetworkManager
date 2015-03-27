@@ -1512,8 +1512,6 @@ do_connections_show (NmCli *nmc, gboolean active_only, gboolean show_secrets,
 	char *profile_flds = NULL, *active_flds = NULL;
 	GPtrArray *invisibles, *sorted_cons;
 
-	nmc->should_wait = FALSE;
-
 	if (argc == 0) {
 		char *fields_str;
 		char *fields_all =    NMC_FIELDS_CON_SHOW_ALL;
@@ -2354,13 +2352,14 @@ do_connection_up (NmCli *nmc, int argc, char **argv)
 	 * and we can follow activation progress.
 	 */
 	nmc->nowait_flag = (nmc->timeout == 0);
-	nmc->should_wait = TRUE;
+	nmc->should_wait++;
 
 	if (!nmc_activate_connection (nmc, connection, ifname, ap, nsp, pwds, activate_connection_cb, &error)) {
 		g_string_printf (nmc->return_text, _("Error: %s."),
 		                 error ? error->message : _("unknown error"));
 		nmc->return_value = error ? error->code : NMC_RESULT_ERROR_CON_ACTIVATION;
 		g_clear_error (&error);
+		nmc->should_wait--;
 		goto error;
 	}
 
@@ -2368,10 +2367,7 @@ do_connection_up (NmCli *nmc, int argc, char **argv)
 	if (nmc->print_output == NMC_PRINT_PRETTY)
 		progress_id = g_timeout_add (120, progress_cb, _("preparing"));
 
-	g_free (line);
-	return nmc->return_value;
 error:
-	nmc->should_wait = FALSE;
 	g_free (line);
 	return nmc->return_value;
 }
@@ -2526,7 +2522,7 @@ do_connection_down (NmCli *nmc, int argc, char **argv)
 	queue = g_slist_reverse (queue);
 
 	if (nmc->timeout > 0) {
-		nmc->should_wait = TRUE;
+		nmc->should_wait++;
 
 		info = g_slice_new0 (ConnectionCbInfo);
 		info->nmc = nmc;
@@ -6205,7 +6201,7 @@ do_connection_add (NmCli *nmc, int argc, char **argv)
 		goto error;
 	}
 
-	nmc->should_wait = TRUE;
+	nmc->should_wait++;
 
 	info = g_malloc0 (sizeof (AddConnectionInfo));
 	info->nmc = nmc;
@@ -6229,7 +6225,6 @@ error:
 	g_free (type_ask);
 	g_free (ifname_ask);
 
-	nmc->should_wait = FALSE;
 	return nmc->return_value;
 }
 
@@ -8578,7 +8573,7 @@ editor_menu_main (NmCli *nmc, NMConnection *connection, const char *connection_t
 			}
 
 			nmc->nowait_flag = FALSE;
-			nmc->should_wait = TRUE;
+			nmc->should_wait++;
 			nmc->print_output = NMC_PRINT_PRETTY;
 			if (!nmc_activate_connection (nmc, NM_CONNECTION (rem_con), ifname, ap_nsp, ap_nsp, NULL,
 			                              activate_connection_editor_cb, &tmp_err)) {
@@ -9052,14 +9047,14 @@ do_connection_edit (NmCli *nmc, int argc, char **argv)
 		g_object_unref (connection);
 	g_free (nmc_tab_completion.con_type);
 
-	nmc->should_wait = TRUE;
+	nmc->should_wait++;
 	return nmc->return_value;
 
 error:
 	g_assert (!connection);
 	g_free (type_ask);
 
-	nmc->should_wait = FALSE;
+	nmc->should_wait++;
 	return nmc->return_value;
 }
 
@@ -9102,7 +9097,6 @@ do_connection_modify (NmCli *nmc,
 	GError *error = NULL;
 
 	nmc->return_value = NMC_RESULT_SUCCESS;
-	nmc->should_wait = FALSE;
 
 	if (argc == 0) {
 		g_string_printf (nmc->return_text, _("Error: No arguments provided."));
@@ -9157,7 +9151,7 @@ do_connection_modify (NmCli *nmc,
 
 	update_connection (!temporary, rc, modify_connection_cb, nmc);
 
-	nmc->should_wait = TRUE;
+	nmc->should_wait++;
 finish:
 	return nmc->return_value;
 }
@@ -9394,7 +9388,7 @@ do_connection_delete (NmCli *nmc, int argc, char **argv)
 	info->timeout_id = g_timeout_add_seconds (nmc->timeout, connection_op_timeout_cb, info);
 
 	nmc->nowait_flag = (nmc->timeout == 0);
-	nmc->should_wait = TRUE;
+	nmc->should_wait++;
 
 	g_signal_connect (nmc->client, NM_CLIENT_CONNECTION_REMOVED,
 	                  G_CALLBACK (connection_removed_cb), info);
@@ -9422,7 +9416,6 @@ do_connection_reload (NmCli *nmc, int argc, char **argv)
 	GError *error = NULL;
 
 	nmc->return_value = NMC_RESULT_SUCCESS;
-	nmc->should_wait = FALSE;
 
 	if (!nm_client_get_nm_running (nmc->client)) {
 		g_string_printf (nmc->return_text, _("Error: NetworkManager is not running."));
@@ -9448,7 +9441,6 @@ do_connection_load (NmCli *nmc, int argc, char **argv)
 	int i;
 
 	nmc->return_value = NMC_RESULT_SUCCESS;
-	nmc->should_wait = FALSE;
 
 	if (!nm_client_get_nm_running (nmc->client)) {
 		g_string_printf (nmc->return_text, _("Error: NetworkManager is not running."));
@@ -9736,7 +9728,7 @@ do_connections (NmCli *nmc, int argc, char **argv)
 		} else if (matches(*argv, "add") == 0) {
 			nmc->return_value = do_connection_add (nmc, argc-1, argv+1);
 		} else if (matches(*argv, "edit") == 0) {
-			nmc->should_wait = TRUE;
+			nmc->should_wait++;
 			editor_thread_data.nmc = nmc;
 			editor_thread_data.argc = argc - 1;
 			editor_thread_data.argv = argv + 1;
