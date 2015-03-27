@@ -33,7 +33,7 @@ nmcli \- command\(hyline tool for controlling NetworkManager
 .sp
 
 .IR OBJECT " := { "
-.BR general " | " networking " | " radio " | " connection " | " device " | " agent
+.BR general " | " networking " | " radio " | " connection " | " device " | " agent " | " monitor
 .RI " }"
 .sp
 
@@ -257,6 +257,16 @@ are supplied, mobile broadband status is printed; \fIon\fP enables mobile broadb
 .B all [ on | off ]
 .br
 Show or set all previously mentioned radio switches at the same time.
+.RE
+
+.TP
+.B monitor \- monitor NetworkManager
+.br
+Use this object to observe NetworkManager activity. Watches for changes
+in connectivity state, devices or connection profiles.
+.br
+See also \fImonitor\fP command of \fIconnection\fP or \fIdevice\fP object
+to watch for changes in certain objects or object classes.
 .RE
 
 .TP
