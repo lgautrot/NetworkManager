@@ -36,6 +36,7 @@
 #include "nm-route-manager.h"
 #include "gsystem-local-alloc.h"
 #include "nm-macros-internal.h"
+#include "nm-utils-private.h"
 
 G_DEFINE_TYPE (NMIP4Config, nm_ip4_config, G_TYPE_OBJECT)
 
@@ -135,9 +136,10 @@ same_prefix (guint32 address1, guint32 address2, int plen)
  */
 gboolean
 nm_ip4_config_capture_resolv_conf (GArray *nameservers,
+                                   GPtrArray *dns_options,
                                    const char *rc_contents)
 {
-	GPtrArray *read_ns;
+	GPtrArray *read_ns, *read_options;
 	guint i, j;
 	gboolean changed = FALSE;
 
@@ -165,8 +167,25 @@ nm_ip4_config_capture_resolv_conf (GArray *nameservers,
 			changed = TRUE;
 		}
 	}
-
 	g_ptr_array_unref (read_ns);
+
+	if (dns_options) {
+		read_options = nm_utils_read_resolv_conf_dns_options (rc_contents);
+		if (!read_options)
+			return changed;
+
+		for (i = 0; i < read_options->len; i++) {
+			const char *s = g_ptr_array_index (read_options, i);
+
+			if (_nm_utils_dns_option_validate (s, NULL, NULL, FALSE, dns_option_descs) &&
+				_nm_utils_dns_option_find_idx (dns_options, s) < 0) {
+				g_ptr_array_add (dns_options, g_strdup (s));
+				changed = TRUE;
+			}
+		}
+		g_ptr_array_unref (read_options);
+	}
+
 	return changed;
 }
 
@@ -249,7 +268,7 @@ nm_ip4_config_capture (int ifindex, gboolean capture_resolv_conf)
 	 * nameservers from /etc/resolv.conf.
 	 */
 	if (priv->addresses->len && priv->has_gateway && capture_resolv_conf) {
-		if (nm_ip4_config_capture_resolv_conf (priv->nameservers, NULL))
+		if (nm_ip4_config_capture_resolv_conf (priv->nameservers, priv->dns_options, NULL))
 			_NOTIFY (config, PROP_NAMESERVERS);
 	}
 
