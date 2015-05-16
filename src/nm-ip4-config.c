@@ -1948,7 +1948,7 @@ nm_ip4_config_set_mtu (NMIP4Config *config, guint32 mtu, NMIPConfigSource source
 {
 	NMIP4ConfigPrivate *priv = NM_IP4_CONFIG_GET_PRIVATE (config);
 
-	if (source > priv->mtu_source) {
+	if (source > priv->mtu_source || source == NM_IP_CONFIG_SOURCE_USER) {
 		priv->mtu = mtu;
 		priv->mtu_source = source;
 	} else if (source == priv->mtu_source && (!priv->mtu || priv->mtu > mtu))

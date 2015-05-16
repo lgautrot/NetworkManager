@@ -1382,6 +1382,35 @@ ip4_config_pre_commit (NMDevice *device, NMIP4Config *config)
 		nm_ip4_config_set_mtu (config, mtu, NM_IP_CONFIG_SOURCE_USER);
 }
 
+static gboolean
+reapply (NMDevice *self, const char *setting, gboolean reconfigure, GError **error)
+{
+	if (strcmp (setting, NM_SETTING_WIRED_SETTING_NAME) == 0) {
+		NMIP4Config *config = nm_device_get_ip4_config (self);
+
+		/* Reapply the user-defined IPv4 MTU */
+		if (reconfigure && config) {
+			NMSettingsConnection *connection = nm_device_get_settings_connection (self);
+			NMConnection *applied = nm_device_get_applied_connection (self);
+			NMSettingWired *s_wired = nm_connection_get_setting_wired (NM_CONNECTION (connection));
+			NMSettingWired *s_wired_applied = nm_connection_get_setting_wired (applied);
+
+			guint32 mtu = nm_setting_wired_get_mtu (s_wired);
+			g_object_set (s_wired_applied, NM_SETTING_WIRED_MTU, mtu, NULL);
+			nm_device_activate_schedule_ip4_config_result (self, config);
+		}
+	} else {
+		g_set_error (error,
+		            NM_DEVICE_ERROR,
+		            NM_DEVICE_ERROR_INCOMPATIBLE_CONNECTION,
+		            "Ethernet devices can't reapply changes to '%s' settings",
+		            setting);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
 static void
 deactivate (NMDevice *device)
 {
@@ -1725,6 +1754,7 @@ nm_device_ethernet_class_init (NMDeviceEthernetClass *klass)
 	parent_class->act_stage2_config = act_stage2_config;
 	parent_class->act_stage3_ip4_config_start = act_stage3_ip4_config_start;
 	parent_class->ip4_config_pre_commit = ip4_config_pre_commit;
+	parent_class->reapply = reapply;
 	parent_class->deactivate = deactivate;
 	parent_class->spec_match_list = spec_match_list;
 	parent_class->update_connection = update_connection;
