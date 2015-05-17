@@ -6509,13 +6509,61 @@ _cleanup_ip6_pre (NMDevice *self, CleanupType cleanup_type)
 
 
 static gboolean
+nm_device_reapply_ip4_config (NMDevice *self,
+                              NMConnection *old,
+                              gboolean reconfigure,
+                              GError **error)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	NMSettingsConnection *connection = nm_device_get_settings_connection (self);
+	NMSettingIPConfig *s_ip4 = nm_connection_get_setting_ip4_config (NM_CONNECTION (connection));
+	NMSettingIPConfig *s_ip4_applied = nm_connection_get_setting_ip4_config (old);
+	const char *method = nm_setting_ip_config_get_method (s_ip4);
+	const char *method_applied = nm_setting_ip_config_get_method (s_ip4_applied);
+
+	if (priv->ip4_state == IP_NONE) {
+		g_set_error_literal (error,
+		                     NM_DEVICE_ERROR,
+		                     NM_DEVICE_ERROR_INCOMPATIBLE_CONNECTION,
+		                     "No IPv4 configuration to update");
+		return FALSE;
+	}
+
+	if (!reconfigure)
+		return TRUE;
+
+	g_clear_object (&priv->con_ip4_config);
+	priv->con_ip4_config = nm_ip4_config_new (nm_device_get_ip_ifindex (self));
+	nm_ip4_config_merge_setting (priv->con_ip4_config,
+				     nm_connection_get_setting_ip4_config (NM_CONNECTION (connection)),
+				     nm_device_get_ip4_route_metric (self));
+
+	if (strcmp (method, method_applied)) {
+		_cleanup_ip4_pre (self, CLEANUP_TYPE_DECONFIGURE);
+		priv->ip4_state = IP_WAIT;
+		if (!nm_device_activate_stage3_ip4_start (self)) {
+			g_set_error_literal (error,
+			                     NM_DEVICE_ERROR,
+			                     NM_DEVICE_ERROR_CREATION_FAILED,
+			                     "Failed to apply IPv4 configuration");
+		}
+	} else {
+		ip4_config_merge_and_apply (self, NULL, TRUE, NULL);
+	}
+
+	return TRUE;
+}
+
+static gboolean
 nm_device_reapply_connection (NMDevice *self, gboolean reconfigure, GError **error)
 {
 	NMSettingsConnection *connection = nm_device_get_settings_connection (self);
 	NMConnection *applied = nm_device_get_applied_connection (self);
+	NMConnection *old;
 	GHashTable *diffs = NULL;
 	GHashTableIter iter;
 	const char *setting;
+	gboolean success = FALSE;
 
 	nm_connection_diff (NM_CONNECTION (connection),
 	                    applied,
@@ -6526,30 +6574,38 @@ nm_device_reapply_connection (NMDevice *self, gboolean reconfigure, GError **err
 	if (!diffs)
 		return TRUE;
 
+	old  = nm_simple_connection_new_clone (applied);
+	if (reconfigure)
+		nm_connection_replace_settings_from_connection (applied, NM_CONNECTION (connection));
+
 	g_hash_table_iter_init (&iter, diffs);
 	while (g_hash_table_iter_next (&iter, (gpointer *)&setting, NULL)) {
-		if (NM_DEVICE_GET_CLASS (self)->reapply) {
+		if (strcmp (setting, NM_SETTING_IP4_CONFIG_SETTING_NAME) == 0) {
+			if (!nm_device_reapply_ip4_config (self, old, reconfigure, error))
+				goto done;
+		} else if (NM_DEVICE_GET_CLASS (self)->reapply) {
 			if (!NM_DEVICE_GET_CLASS (self)->reapply (self, setting, reconfigure, error))
-				return FALSE;
+				goto done;
 		} else {
 			g_set_error (error,
 			             NM_DEVICE_ERROR,
 			             NM_DEVICE_ERROR_INCOMPATIBLE_CONNECTION,
 			             "Can't reapply changes to '%s' settings",
 			             setting);
-			return FALSE;
+			goto done;
 		}
 	}
 
-	if (reconfigure)
-		nm_connection_replace_settings_from_connection (applied, NM_CONNECTION (connection));
-
-	return TRUE;
+	success = TRUE;
+done:
+	g_object_unref (old);
+	return success;
 }
 
 static void
 reapply_cb (NMDevice *self,
             GDBusMethodInvocation *context,
+            NMAuthSubject *subject,
             GError *error,
             gpointer user_data)
 {
