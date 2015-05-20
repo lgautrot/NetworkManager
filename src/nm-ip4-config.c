@@ -36,7 +36,7 @@
 #include "nm-route-manager.h"
 #include "gsystem-local-alloc.h"
 #include "nm-macros-internal.h"
-#include "nm-utils-private.h"
+#include "nm-core-internal.h"
 
 G_DEFINE_TYPE (NMIP4Config, nm_ip4_config, G_TYPE_OBJECT)
 

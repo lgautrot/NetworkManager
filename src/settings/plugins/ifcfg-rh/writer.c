@@ -42,7 +42,6 @@
 #include <nm-setting-team-port.h>
 #include "nm-core-internal.h"
 #include <nm-utils.h>
-#include <nm-utils-private.h>
 #include "nm-core-internal.h"
 #include "nm-macros-internal.h"
 
