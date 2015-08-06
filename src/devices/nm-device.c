@@ -1031,7 +1031,7 @@ free_slave_info (SlaveInfo *info)
 }
 
 /**
- * nm_device_enslave_slave:
+ * nm_device_master_enslave_slave:
  * @self: the master device
  * @slave: the slave device to enslave
  * @connection: (allow-none): the slave device's connection
@@ -1043,7 +1043,7 @@ free_slave_info (SlaveInfo *info)
  *  other devices.
  */
 static gboolean
-nm_device_enslave_slave (NMDevice *self, NMDevice *slave, NMConnection *connection)
+nm_device_master_enslave_slave (NMDevice *self, NMDevice *slave, NMConnection *connection)
 {
 	SlaveInfo *info;
 	gboolean success = FALSE;
@@ -1091,7 +1091,7 @@ nm_device_enslave_slave (NMDevice *self, NMDevice *slave, NMConnection *connecti
 }
 
 /**
- * nm_device_release_one_slave:
+ * nm_device_master_release_one_slave:
  * @self: the master device
  * @slave: the slave device to release
  * @configure: whether @self needs to actually release @slave
@@ -1105,7 +1105,7 @@ nm_device_enslave_slave (NMDevice *self, NMDevice *slave, NMConnection *connecti
  *  other devices, or if @slave was never enslaved.
  */
 static gboolean
-nm_device_release_one_slave (NMDevice *self, NMDevice *slave, gboolean configure, NMDeviceStateReason reason)
+nm_device_master_release_one_slave (NMDevice *self, NMDevice *slave, gboolean configure, NMDeviceStateReason reason)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 	SlaveInfo *info;
@@ -1180,7 +1180,7 @@ nm_device_finish_init (NMDevice *self)
 		nm_device_set_unmanaged_initial (self, NM_UNMANAGED_EXTERNAL_DOWN, TRUE);
 
 	if (priv->master)
-		nm_device_enslave_slave (priv->master, self, NULL);
+		nm_device_master_enslave_slave (priv->master, self, NULL);
 
 	if (priv->ifindex > 0) {
 		if (priv->ifindex == 1) {
@@ -1394,7 +1394,7 @@ device_recheck_slave_status (NMDevice *self, NMPlatformLink *plink)
 	g_return_if_fail (plink != NULL);
 
 	if (priv->is_enslaved && plink->master != nm_device_get_ifindex (priv->master))
-		nm_device_release_one_slave (priv->master, self, FALSE, NM_DEVICE_STATE_REASON_NONE);
+		nm_device_master_release_one_slave (priv->master, self, FALSE, NM_DEVICE_STATE_REASON_NONE);
 
 	if (plink->master && !priv->is_enslaved) {
 		NMDevice *master;
@@ -2112,7 +2112,7 @@ slave_state_changed (NMDevice *slave,
 		return;
 
 	if (slave_new_state == NM_DEVICE_STATE_IP_CONFIG)
-		nm_device_enslave_slave (self, slave, nm_device_get_applied_connection (slave));
+		nm_device_master_enslave_slave (self, slave, nm_device_get_applied_connection (slave));
 	else if (slave_new_state > NM_DEVICE_STATE_ACTIVATED)
 		release = TRUE;
 	else if (   slave_new_state <= NM_DEVICE_STATE_DISCONNECTED
@@ -2122,7 +2122,7 @@ slave_state_changed (NMDevice *slave,
 	}
 
 	if (release) {
-		nm_device_release_one_slave (self, slave, TRUE, reason);
+		nm_device_master_release_one_slave (self, slave, TRUE, reason);
 		/* Bridge/bond/team interfaces are left up until manually deactivated */
 		if (priv->slaves == NULL && priv->state == NM_DEVICE_STATE_ACTIVATED)
 			_LOGD (LOGD_DEVICE, "last slave removed; remaining activated");
@@ -2268,7 +2268,7 @@ nm_device_master_release_slaves (NMDevice *self)
 	while (priv->slaves) {
 		SlaveInfo *info = priv->slaves->data;
 
-		nm_device_release_one_slave (self, info->slave, TRUE, reason);
+		nm_device_master_release_one_slave (self, info->slave, TRUE, reason);
 	}
 }
 
@@ -2421,7 +2421,7 @@ nm_device_removed (NMDevice *self)
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 
 	if (priv->is_enslaved)
-		nm_device_release_one_slave (priv->master, self, FALSE, NM_DEVICE_STATE_REASON_REMOVED);
+		nm_device_master_release_one_slave (priv->master, self, FALSE, NM_DEVICE_STATE_REASON_REMOVED);
 }
 
 
@@ -3385,7 +3385,7 @@ activate_stage2_device_config (NMDevice *self)
 		NMDeviceState slave_state = nm_device_get_state (info->slave);
 
 		if (slave_state == NM_DEVICE_STATE_IP_CONFIG)
-			nm_device_enslave_slave (self, info->slave, nm_device_get_applied_connection (info->slave));
+			nm_device_master_enslave_slave (self, info->slave, nm_device_get_applied_connection (info->slave));
 		else if (   nm_device_uses_generated_assumed_connection (self)
 		         && slave_state <= NM_DEVICE_STATE_DISCONNECTED)
 			nm_device_queue_recheck_assume (info->slave);
