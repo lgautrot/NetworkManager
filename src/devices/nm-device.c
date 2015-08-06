@@ -1145,6 +1145,26 @@ nm_device_master_release_one_slave (NMDevice *self, NMDevice *slave, gboolean co
 	return success;
 }
 
+static gboolean
+nm_device_slave_release_from_master (NMDevice *self, gboolean configure, NMDeviceStateReason reason)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	gboolean success = FALSE;
+
+	if (priv->master) {
+		gs_unref_object NMDevice *master = NULL;
+
+		success = nm_device_master_release_one_slave (priv->master, self, configure, reason);
+		master = priv->master;
+		priv->master = NULL;
+
+		g_return_val_if_fail (master && !priv->is_enslaved, success);
+		g_return_val_if_fail (success, success);
+	}
+
+	return success;
+}
+
 /**
  * can_unmanaged_external_down:
  * @self: the device
@@ -1387,23 +1407,33 @@ nm_device_set_carrier (NMDevice *self, gboolean carrier)
 }
 
 static void
-device_recheck_slave_status (NMDevice *self, NMPlatformLink *plink)
+device_recheck_slave_status (NMDevice *self, const NMPlatformLink *plink)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	gboolean notify_master_changed = FALSE;
 
-	g_return_if_fail (plink != NULL);
+	g_return_if_fail (plink);
 
-	if (priv->is_enslaved && plink->master != nm_device_get_ifindex (priv->master))
-		nm_device_master_release_one_slave (priv->master, self, FALSE, NM_DEVICE_STATE_REASON_NONE);
+	if (priv->master) {
+		if (   plink->master > 0
+		    && plink->master == nm_device_get_ifindex (priv->master)) {
+			/* call add-slave again. We expect @self already to be added to
+			 * the master, but this also triggers a recheck-assume. */
+			nm_device_master_add_slave (priv->master, self, FALSE);
+			return;
+		}
 
-	if (plink->master && !priv->is_enslaved) {
+		notify_master_changed = nm_device_slave_release_from_master (self, FALSE, NM_DEVICE_STATE_REASON_NONE);
+	}
+	if (plink->master > 0) {
 		NMDevice *master;
 
 		master = nm_manager_get_device_by_ifindex (nm_manager_get (), plink->master);
 		if (master && NM_DEVICE_GET_CLASS (master)->enslave_slave) {
-			g_clear_object (&priv->master);
+			g_assert (!priv->is_enslaved && !priv->master);
 			priv->master = g_object_ref (master);
 			nm_device_master_add_slave (master, self, FALSE);
+			notify_master_changed = TRUE;
 		} else if (master) {
 			_LOGI (LOGD_DEVICE, "enslaved to non-master-type device %s; ignoring",
 			       nm_device_get_iface (master));
@@ -1413,6 +1443,9 @@ device_recheck_slave_status (NMDevice *self, NMPlatformLink *plink)
 			       nm_platform_link_get_name (NM_PLATFORM_GET, plink->master));
 		}
 	}
+
+	if (notify_master_changed)
+		g_object_notify (G_OBJECT (self), NM_DEVICE_MASTER);
 }
 
 static gboolean
@@ -2144,12 +2177,14 @@ slave_state_changed (NMDevice *slave,
 static gboolean
 nm_device_master_add_slave (NMDevice *self, NMDevice *slave, gboolean configure)
 {
-	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	NMDevicePrivate *priv;
 	SlaveInfo *info;
 
-	g_return_val_if_fail (self != NULL, FALSE);
-	g_return_val_if_fail (slave != NULL, FALSE);
+	g_return_val_if_fail (NM_IS_DEVICE (self), FALSE);
+	g_return_val_if_fail (NM_IS_DEVICE (slave), FALSE);
 	g_return_val_if_fail (NM_DEVICE_GET_CLASS (self)->enslave_slave != NULL, FALSE);
+
+	priv = NM_DEVICE_GET_PRIVATE (self);
 
 	if (configure)
 		g_return_val_if_fail (nm_device_get_state (slave) >= NM_DEVICE_STATE_DISCONNECTED, FALSE);
@@ -2300,10 +2335,11 @@ nm_device_get_master (NMDevice *self)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 
-	if (priv->is_enslaved)
+	if (priv->is_enslaved) {
+		g_return_val_if_fail (priv->master, NULL);
 		return priv->master;
-	else
-		return NULL;
+	}
+	return NULL;
 }
 
 /**
@@ -2321,7 +2357,7 @@ nm_device_slave_notify_enslave (NMDevice *self, gboolean success)
 	NMConnection *connection = nm_device_get_applied_connection (self);
 	gboolean activating = (priv->state == NM_DEVICE_STATE_IP_CONFIG);
 
-	g_assert (priv->master);
+	g_return_if_fail (priv->master);
 
 	if (!priv->is_enslaved) {
 		if (success) {
@@ -2385,9 +2421,12 @@ nm_device_slave_notify_release (NMDevice *self, NMDeviceStateReason reason)
 
 		nm_device_queue_state (self, new_state, reason);
 	} else if (priv->master)
-		_LOGI (LOGD_DEVICE, "released from master %s", nm_device_get_iface (priv->master));
-	else
-		_LOGD (LOGD_DEVICE, "released from master%s", priv->is_enslaved ? "" : " (was not enslaved)");
+		_LOGI (LOGD_DEVICE, "released from master device %s", nm_device_get_iface (priv->master));
+	else if (priv->is_enslaved) {
+		priv->is_enslaved = FALSE;
+		g_return_if_reached ();
+	} else
+		_LOGD (LOGD_DEVICE, "released from master but was not enslaved");
 
 	if (priv->is_enslaved) {
 		priv->is_enslaved = FALSE;
@@ -2418,10 +2457,8 @@ nm_device_get_enslaved (NMDevice *self)
 void
 nm_device_removed (NMDevice *self)
 {
-	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-
-	if (priv->is_enslaved)
-		nm_device_master_release_one_slave (priv->master, self, FALSE, NM_DEVICE_STATE_REASON_REMOVED);
+	if (nm_device_slave_release_from_master (self, FALSE, NM_DEVICE_STATE_REASON_REMOVED))
+		g_object_notify (G_OBJECT (self), NM_DEVICE_MASTER);
 }
 
 
@@ -2988,7 +3025,8 @@ nm_device_queue_recheck_assume (NMDevice *self)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 
-	if (nm_device_can_assume_connections (self) && !priv->recheck_assume_id)
+	if (   !priv->recheck_assume_id
+	    && nm_device_can_assume_connections (self))
 		priv->recheck_assume_id = g_idle_add (nm_device_emit_recheck_assume, self);
 }
 
@@ -3201,19 +3239,25 @@ master_ready (NMDevice *self,
               NMActiveConnection *active)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-	NMActiveConnection *master;
+	NMActiveConnection *master_connection;
+	NMDevice *master;
 
 	g_return_if_fail (priv->state == NM_DEVICE_STATE_PREPARE);
 	g_return_if_fail (!priv->master_ready_handled);
 
 	/* Notify a master device that it has a new slave */
 	g_return_if_fail (nm_active_connection_get_master_ready (active));
-	master = nm_active_connection_get_master (active);
+	master_connection = nm_active_connection_get_master (active);
 
 	priv->master_ready_handled = TRUE;
 	nm_clear_g_signal_handler (active, &priv->master_ready_id);
 
-	priv->master = g_object_ref (nm_active_connection_get_device (master));
+	master = nm_active_connection_get_device (master_connection);
+	if (priv->master != master) {
+		nm_device_slave_release_from_master (self, FALSE, NM_DEVICE_STATE_REASON_NONE);
+		priv->master = g_object_ref (master);
+	}
+	/* If the master didn't change, add-slave only rechecks whether to assume a connection. */
 	nm_device_master_add_slave (priv->master,
 	                            self,
 	                            nm_active_connection_get_assumed (active) ? FALSE : TRUE);
@@ -3221,6 +3265,7 @@ master_ready (NMDevice *self,
 	_LOGD (LOGD_DEVICE, "master connection ready; master device %s",
 	       nm_device_get_iface (priv->master));
 
+	g_object_notify (G_OBJECT (self), NM_DEVICE_MASTER);
 }
 
 static void
@@ -9035,9 +9080,8 @@ nm_device_cleanup (NMDevice *self, NMDeviceStateReason reason, CleanupType clean
 
 	/* slave: mark no longer enslaved */
 	if (nm_platform_link_get_master (NM_PLATFORM_GET, priv->ifindex) <= 0) {
-		g_clear_object (&priv->master);
-		priv->is_enslaved = FALSE;
-		g_object_notify (G_OBJECT (self), NM_DEVICE_MASTER);
+		if (nm_device_slave_release_from_master (self, FALSE, NM_DEVICE_STATE_REASON_NONE))
+			g_object_notify (G_OBJECT (self), NM_DEVICE_MASTER);
 	}
 
 	/* Take out any entries in the routing table and any IP address the device had. */
