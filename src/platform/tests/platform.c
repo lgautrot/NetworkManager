@@ -326,11 +326,12 @@ do_vlan_get_info (char **argv)
 	int ifindex = parse_ifindex (*argv++);
 	int parent;
 	int vlanid;
+	guint32 flags;
 
-	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, ifindex, &parent, &vlanid))
+	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, ifindex, &parent, &vlanid, &flags))
 		return FALSE;
 
-	printf ("%d %d\n", parent, vlanid);
+	printf ("%d %d 0x%X\n", parent, vlanid, flags);
 
 	return TRUE;
 }
