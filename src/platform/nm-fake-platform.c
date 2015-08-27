@@ -633,6 +633,7 @@ vlan_add (NMPlatform *platform, const char *name, int parent, int vlan_id, guint
 	g_return_val_if_fail (device, FALSE);
 
 	device->vlan_id = vlan_id;
+	device->link.vlan_flags = vlan_flags;
 	device->link.parent = parent;
 
 	if (out_link)
@@ -641,7 +642,7 @@ vlan_add (NMPlatform *platform, const char *name, int parent, int vlan_id, guint
 }
 
 static gboolean
-vlan_get_info (NMPlatform *platform, int ifindex, int *parent, int *vlan_id)
+vlan_get_info (NMPlatform *platform, int ifindex, int *parent, int *vlan_id, guint32 *flags)
 {
 	NMFakePlatformLink *device = link_get (platform, ifindex);
 
@@ -651,6 +652,8 @@ vlan_get_info (NMPlatform *platform, int ifindex, int *parent, int *vlan_id)
 		*parent = device->link.parent;
 	if (vlan_id)
 		*vlan_id = device->vlan_id;
+	if (flags)
+		*flags = device->link.vlan_flags;
 
 	return TRUE;
 }

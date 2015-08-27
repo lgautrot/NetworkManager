@@ -1524,7 +1524,7 @@ nm_platform_slave_get_option (NMPlatform *self, int ifindex, const char *option)
 }
 
 gboolean
-nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid)
+nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid, guint32 *flags)
 {
 	_CHECK_SELF (self, klass, FALSE);
 
@@ -1534,11 +1534,13 @@ nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlan
 		*parent = 0;
 	if (vlanid)
 		*vlanid = 0;
+	if (flags)
+		*flags = 0;
 
 	if (nm_platform_link_get_type (self, ifindex) != NM_LINK_TYPE_VLAN)
 		return FALSE;
 
-	return klass->vlan_get_info (self, ifindex, parent, vlanid);
+	return klass->vlan_get_info (self, ifindex, parent, vlanid, flags);
 }
 
 gboolean
@@ -2425,7 +2427,7 @@ nm_platform_link_to_string (const NMPlatformLink *link)
 		parent[0] = 0;
 
 	if (link->vlan_id)
-		g_snprintf (str_vlan, sizeof (str_vlan), " vlan %u", (guint) link->vlan_id);
+		g_snprintf (str_vlan, sizeof (str_vlan), " vlan id %u flags %u", (guint) link->vlan_id, link->vlan_flags);
 	else
 		str_vlan[0] = '\0';
 
@@ -2831,6 +2833,7 @@ nm_platform_link_cmp (const NMPlatformLink *a, const NMPlatformLink *b)
 	_CMP_FIELD (a, b, master);
 	_CMP_FIELD (a, b, parent);
 	_CMP_FIELD (a, b, vlan_id);
+	_CMP_FIELD (a, b, vlan_flags);
 	_CMP_FIELD (a, b, flags);
 	_CMP_FIELD (a, b, connected);
 	_CMP_FIELD (a, b, mtu);

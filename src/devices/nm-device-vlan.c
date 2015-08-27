@@ -171,7 +171,7 @@ realize (NMDevice *device,
 
 	g_assert (plink->type == NM_LINK_TYPE_VLAN);
 
-	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, plink->ifindex, &parent_ifindex, &vlan_id)) {
+	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, plink->ifindex, &parent_ifindex, &vlan_id, NULL)) {
 		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_FAILED,
 		             "(%s): failed to read VLAN properties", plink->name);
 		return FALSE;
@@ -303,7 +303,7 @@ component_added (NMDevice *device, GObject *component)
 		return FALSE;
 	added_device = NM_DEVICE (component);
 
-	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, nm_device_get_ifindex (device), &parent_ifindex, NULL)) {
+	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, nm_device_get_ifindex (device), &parent_ifindex, NULL, NULL)) {
 		_LOGW (LOGD_VLAN, "failed to get VLAN interface info while checking added component.");
 		return FALSE;
 	}
@@ -463,6 +463,7 @@ update_connection (NMDevice *device, NMConnection *connection)
 	NMSettingVlan *s_vlan = nm_connection_get_setting_vlan (connection);
 	int ifindex = nm_device_get_ifindex (device);
 	int parent_ifindex = -1, vlan_id = -1;
+	guint32 flags = 0;
 	NMDevice *parent;
 	const char *setting_parent, *new_parent;
 
@@ -471,7 +472,7 @@ update_connection (NMDevice *device, NMConnection *connection)
 		nm_connection_add_setting (connection, (NMSetting *) s_vlan);
 	}
 
-	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, ifindex, &parent_ifindex, &vlan_id)) {
+	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, ifindex, &parent_ifindex, &vlan_id, &flags)) {
 		_LOGW (LOGD_VLAN, "failed to get VLAN interface info while updating connection.");
 		return;
 	}
@@ -506,6 +507,9 @@ update_connection (NMDevice *device, NMConnection *connection)
 			g_object_set (s_vlan, NM_SETTING_VLAN_PARENT, new_parent, NULL);
 	} else
 		g_object_set (s_vlan, NM_SETTING_VLAN_PARENT, NULL, NULL);
+
+	if (flags != nm_setting_vlan_get_flags (s_vlan))
+		g_object_set (s_vlan, NM_SETTING_VLAN_FLAGS, (NMVlanFlags) flags, NULL);
 }
 
 static NMActStageReturn

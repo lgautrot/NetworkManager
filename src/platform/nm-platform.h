@@ -134,6 +134,9 @@ struct _NMPlatformLink {
 	/* rtnl_link_vlan_get_id(), IFLA_VLAN_ID */
 	guint16 vlan_id;
 
+	/* rtnl_link_vlan_get_flags(), IFLA_VLAN_FLAGS */
+	guint32 vlan_flags;
+
 	/* IFF_* flags as u32. Note that ifi_flags in 'struct ifinfomsg' is declared as 'unsigned',
 	 * but libnl stores the flag internally as u32.  */
 	guint32 flags;
@@ -474,7 +477,7 @@ typedef struct {
 	char * (*slave_get_option) (NMPlatform *, int ifindex, const char *option);
 
 	gboolean (*vlan_add) (NMPlatform *, const char *name, int parent, int vlanid, guint32 vlanflags, NMPlatformLink *out_link);
-	gboolean (*vlan_get_info) (NMPlatform *, int ifindex, int *parent, int *vlan_id);
+	gboolean (*vlan_get_info) (NMPlatform *, int ifindex, int *parent, int *vlan_id, guint32 *flags);
 	gboolean (*vlan_set_flags) (NMPlatform *, int ifindex, guint32 flags);
 	gboolean (*vlan_set_ingress_map) (NMPlatform *, int ifindex, int from, int to);
 	gboolean (*vlan_set_egress_map) (NMPlatform *, int ifindex, int from, int to);
@@ -674,7 +677,7 @@ gboolean nm_platform_slave_set_option (NMPlatform *self, int ifindex, const char
 char *nm_platform_slave_get_option (NMPlatform *self, int ifindex, const char *option);
 
 NMPlatformError nm_platform_vlan_add (NMPlatform *self, const char *name, int parent, int vlanid, guint32 vlanflags, NMPlatformLink *out_link);
-gboolean nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid);
+gboolean nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid, guint32 *flags);
 gboolean nm_platform_vlan_set_flags (NMPlatform *self, int ifindex, guint32 flags);
 gboolean nm_platform_vlan_set_ingress_map (NMPlatform *self, int ifindex, int from, int to);
 gboolean nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to);

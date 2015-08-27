@@ -23,6 +23,7 @@ dump_interface (NMPlatformLink *link)
 	char networkstr[INET6_ADDRSTRLEN];
 	char gatewaystr[INET6_ADDRSTRLEN];
 	int vlan_id, vlan_parent;
+	guint32 vlan_flags;
 	const char *address;
 	size_t addrlen;
 	int i;
@@ -45,10 +46,10 @@ dump_interface (NMPlatformLink *link)
 	if (link->driver)
 		printf ("    driver: %s\n", link->driver);
 	printf ("    UDI: %s\n", nm_platform_link_get_udi (NM_PLATFORM_GET, link->ifindex));
-	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, link->ifindex, &vlan_parent, &vlan_id))
+	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, link->ifindex, &vlan_parent, &vlan_id, &vlan_flags))
 		g_assert_not_reached ();
 	if (vlan_parent)
-		printf ("    vlan parent %d id %d\n", vlan_parent, vlan_id);
+		printf ("    vlan parent %d id %d flags 0x%X\n", vlan_parent, vlan_id, vlan_flags);
 
 	if (nm_platform_link_is_software (NM_PLATFORM_GET, link->ifindex))
 		printf ("    class software\n");

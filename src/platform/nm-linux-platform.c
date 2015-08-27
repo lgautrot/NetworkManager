@@ -1041,9 +1041,10 @@ _nmp_vt_cmd_plobj_init_from_nl_link (NMPlatform *platform, NMPlatformObject *_ob
 	obj->arptype = rtnl_link_get_arptype (nlo);
 
 	if (obj->type == NM_LINK_TYPE_VLAN) {
-		if (!g_strcmp0 (rtnl_link_get_type (nlo), "vlan"))
+		if (!g_strcmp0 (rtnl_link_get_type (nlo), "vlan")) {
 			obj->vlan_id = rtnl_link_vlan_get_id (nlo);
-		else if (completed_from_cache) {
+			obj->vlan_flags = rtnl_link_vlan_get_flags (nlo);
+		} else if (completed_from_cache) {
 			_lookup_link_cached (platform, obj->ifindex, completed_from_cache, &link_cached);
 			if (link_cached)
 				obj->vlan_id = link_cached->link.vlan_id;
@@ -3243,19 +3244,23 @@ vlan_add (NMPlatform *platform,
 }
 
 static gboolean
-vlan_get_info (NMPlatform *platform, int ifindex, int *parent, int *vlan_id)
+vlan_get_info (NMPlatform *platform, int ifindex, int *parent, int *vlan_id, guint32 *flags)
 {
 	const NMPObject *obj = cache_lookup_link (platform, ifindex);
 	int p = 0, v = 0;
+	guint32 f = 0;
 
 	if (obj) {
 		p = obj->link.parent;
 		v = obj->link.vlan_id;
+		f = obj->link.vlan_flags;
 	}
 	if (parent)
 		*parent = p;
 	if (vlan_id)
 		*vlan_id = v;
+	if (flags)
+		*flags = f;
 	return !!obj;
 }
 
