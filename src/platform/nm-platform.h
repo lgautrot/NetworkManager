@@ -87,6 +87,9 @@ typedef enum {
 
 #define NM_PLATFORM_LINK_OTHER_NETNS    (-1)
 
+/* Maximal number of VLAN egress priority mappings stored by NMPlatform */
+#define NM_PLATFORM_VLAN_MAX_EGRESS  64
+
 #define __NMPlatformObject_COMMON \
 	int ifindex; \
 	;
@@ -136,6 +139,15 @@ struct _NMPlatformLink {
 
 	/* rtnl_link_vlan_get_flags(), IFLA_VLAN_FLAGS */
 	guint32 vlan_flags;
+
+	/* rtnl_link_vlan_get_ingress_map(), IFLA_VLAN_INGRESS_QOS */
+	guint32 vlan_ingress_map[8]; /* VLAN_PRIO_MAX + 1 */
+
+	/* rtnl_link_vlan_get_egress_map(), IFLA_VLAN_EGRESS_QOS */
+	/* Limit maximum of egress mappings to have a static array */
+	int vlan_egress_map_size;
+	guint32 vlan_egress_map_from[NM_PLATFORM_VLAN_MAX_EGRESS];
+	guint32 vlan_egress_map_to  [NM_PLATFORM_VLAN_MAX_EGRESS];
 
 	/* IFF_* flags as u32. Note that ifi_flags in 'struct ifinfomsg' is declared as 'unsigned',
 	 * but libnl stores the flag internally as u32.  */
@@ -480,7 +492,10 @@ typedef struct {
 	gboolean (*vlan_get_info) (NMPlatform *, int ifindex, int *parent, int *vlan_id, guint32 *flags);
 	gboolean (*vlan_set_flags) (NMPlatform *, int ifindex, guint32 flags);
 	gboolean (*vlan_set_ingress_map) (NMPlatform *, int ifindex, int from, int to);
+	gboolean (*vlan_get_ingress_map) (NMPlatform *, int ifindex, const guint32 **map);
 	gboolean (*vlan_set_egress_map) (NMPlatform *, int ifindex, int from, int to);
+	gboolean (*vlan_get_egress_map) (NMPlatform *, int ifindex, const guint32 **map_from,
+	                                 const guint32 **map_to, guint *size);
 
 	gboolean (*infiniband_partition_add) (NMPlatform *, int parent, int p_key, NMPlatformLink *out_link);
 	gboolean (*infiniband_get_info)      (NMPlatform *,
@@ -680,7 +695,9 @@ NMPlatformError nm_platform_vlan_add (NMPlatform *self, const char *name, int pa
 gboolean nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid, guint32 *flags);
 gboolean nm_platform_vlan_set_flags (NMPlatform *self, int ifindex, guint32 flags);
 gboolean nm_platform_vlan_set_ingress_map (NMPlatform *self, int ifindex, int from, int to);
+gboolean nm_platform_vlan_get_ingress_map (NMPlatform *self, int ifindex, const guint32 **map);
 gboolean nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to);
+gboolean nm_platform_vlan_get_egress_map (NMPlatform *self, int ifindex, const guint32 **map_from, const guint32 **map_to, guint *size);
 
 NMPlatformError nm_platform_infiniband_partition_add (NMPlatform *self, int parent, int p_key, NMPlatformLink *out_link);
 gboolean nm_platform_infiniband_get_info (NMPlatform *self, int ifindex, int *parent, int *p_key, const char **mode);

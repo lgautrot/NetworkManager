@@ -36,6 +36,7 @@
 #include "nm-device-factory.h"
 #include "nm-manager.h"
 #include "nm-core-internal.h"
+#include <netlink/route/link/vlan.h>
 
 #include "nmdbus-device-vlan.h"
 
@@ -464,8 +465,12 @@ update_connection (NMDevice *device, NMConnection *connection)
 	int ifindex = nm_device_get_ifindex (device);
 	int parent_ifindex = -1, vlan_id = -1;
 	guint32 flags = 0;
+	const guint32 *ingress_map;
+	const guint32 *egress_map_from, *egress_map_to;
+	guint32 size;
 	NMDevice *parent;
 	const char *setting_parent, *new_parent;
+	int i;
 
 	if (!s_vlan) {
 		s_vlan = (NMSettingVlan *) nm_setting_vlan_new ();
@@ -474,6 +479,15 @@ update_connection (NMDevice *device, NMConnection *connection)
 
 	if (!nm_platform_vlan_get_info (NM_PLATFORM_GET, ifindex, &parent_ifindex, &vlan_id, &flags)) {
 		_LOGW (LOGD_VLAN, "failed to get VLAN interface info while updating connection.");
+		return;
+	}
+
+	if (!nm_platform_vlan_get_ingress_map (NM_PLATFORM_GET, ifindex, &ingress_map)) {
+		_LOGW (LOGD_VLAN, "failed to get VLAN ingress mapping while updating connection.");
+		return;
+	}
+	if (!nm_platform_vlan_get_egress_map (NM_PLATFORM_GET, ifindex, &egress_map_from, &egress_map_to, &size)) {
+		_LOGW (LOGD_VLAN, "failed to get VLAN egress mapping while updating connection.");
 		return;
 	}
 
@@ -510,6 +524,13 @@ update_connection (NMDevice *device, NMConnection *connection)
 
 	if (flags != nm_setting_vlan_get_flags (s_vlan))
 		g_object_set (s_vlan, NM_SETTING_VLAN_FLAGS, (NMVlanFlags) flags, NULL);
+
+	for (i = 0; ingress_map && i <= VLAN_PRIO_MAX; i++) {
+		if (ingress_map[i])
+			nm_setting_vlan_add_priority (s_vlan, NM_VLAN_INGRESS_MAP, i, ingress_map[i]);
+	}
+	for (i = 0; i < size; i++)
+		nm_setting_vlan_add_priority (s_vlan, NM_VLAN_EGRESS_MAP, egress_map_from[i], egress_map_to[i]);
 }
 
 static NMActStageReturn

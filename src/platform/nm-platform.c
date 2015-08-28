@@ -1566,6 +1566,19 @@ nm_platform_vlan_set_ingress_map (NMPlatform *self, int ifindex, int from, int t
 }
 
 gboolean
+nm_platform_vlan_get_ingress_map (NMPlatform *self, int ifindex, const guint32 **map)
+{
+	_CHECK_SELF (self, klass, FALSE);
+
+	g_return_val_if_fail (ifindex > 0, FALSE);
+
+	if (nm_platform_link_get_type (self, ifindex) != NM_LINK_TYPE_VLAN)
+		return FALSE;
+
+	return klass->vlan_get_ingress_map (self, ifindex, map);
+}
+
+gboolean
 nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to)
 {
 	_CHECK_SELF (self, klass, FALSE);
@@ -1574,6 +1587,20 @@ nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to
 
 	_LOGD ("link: setting vlan egress map for %d from %d to %d", ifindex, from, to);
 	return klass->vlan_set_egress_map (self, ifindex, from, to);
+}
+
+gboolean
+nm_platform_vlan_get_egress_map (NMPlatform *self, int ifindex, const guint32 **map_from,
+                                 const guint32 **map_to, guint32 *size)
+{
+	_CHECK_SELF (self, klass, FALSE);
+
+	g_return_val_if_fail (ifindex > 0, FALSE);
+
+	if (nm_platform_link_get_type (self, ifindex) != NM_LINK_TYPE_VLAN)
+		return FALSE;
+
+	return klass->vlan_get_egress_map (self, ifindex, map_from, map_to, size);
 }
 
 NMPlatformError
@@ -2834,6 +2861,10 @@ nm_platform_link_cmp (const NMPlatformLink *a, const NMPlatformLink *b)
 	_CMP_FIELD (a, b, parent);
 	_CMP_FIELD (a, b, vlan_id);
 	_CMP_FIELD (a, b, vlan_flags);
+	_CMP_FIELD_MEMCMP (a, b, vlan_ingress_map);
+	_CMP_FIELD (a, b, vlan_egress_map_size);
+	_CMP_FIELD_MEMCMP_LEN (a, b, vlan_egress_map_from, a->vlan_egress_map_size);
+	_CMP_FIELD_MEMCMP_LEN (a, b, vlan_egress_map_to, a->vlan_egress_map_size);
 	_CMP_FIELD (a, b, flags);
 	_CMP_FIELD (a, b, connected);
 	_CMP_FIELD (a, b, mtu);
