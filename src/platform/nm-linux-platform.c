@@ -3260,6 +3260,20 @@ vlan_get_info (NMPlatform *platform, int ifindex, int *parent, int *vlan_id)
 }
 
 static gboolean
+vlan_set_flags (NMPlatform *platform, int ifindex, guint32 flags)
+{
+	auto_nl_object struct rtnl_link *change = (struct rtnl_link *) build_rtnl_link (ifindex, NULL, NM_LINK_TYPE_VLAN);
+	unsigned int all_flags = NM_VLAN_FLAGS_ALL;
+
+	rtnl_link_vlan_unset_flags (change, all_flags);
+	rtnl_link_vlan_set_flags (change, flags);
+
+	_LOGD ("link: change %d: vlan flags 0x%X", ifindex, flags);
+
+	return do_change_link (platform, change, TRUE) == NM_PLATFORM_ERROR_SUCCESS;
+}
+
+static gboolean
 vlan_set_ingress_map (NMPlatform *platform, int ifindex, int from, int to)
 {
 	auto_nl_object struct rtnl_link *change = (struct rtnl_link *) build_rtnl_link (ifindex, NULL, NM_LINK_TYPE_VLAN);
@@ -5113,6 +5127,7 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 
 	platform_class->vlan_add = vlan_add;
 	platform_class->vlan_get_info = vlan_get_info;
+	platform_class->vlan_set_flags = vlan_set_flags;
 	platform_class->vlan_set_ingress_map = vlan_set_ingress_map;
 	platform_class->vlan_set_egress_map = vlan_set_egress_map;
 
