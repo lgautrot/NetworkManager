@@ -479,6 +479,7 @@ typedef struct {
 
 	gboolean (*vlan_add) (NMPlatform *, const char *name, int parent, int vlanid, guint32 vlanflags, NMPlatformLink *out_link);
 	gboolean (*vlan_get_info) (NMPlatform *, int ifindex, int *parent, int *vlan_id);
+	gboolean (*vlan_set_flags) (NMPlatform *, int ifindex, guint32 flags);
 	gboolean (*vlan_set_ingress_map) (NMPlatform *, int ifindex, int from, int to);
 	gboolean (*vlan_set_egress_map) (NMPlatform *, int ifindex, int from, int to);
 
@@ -669,6 +670,7 @@ char *nm_platform_slave_get_option (NMPlatform *self, int ifindex, const char *o
 
 NMPlatformError nm_platform_vlan_add (NMPlatform *self, const char *name, int parent, int vlanid, guint32 vlanflags, NMPlatformLink *out_link);
 gboolean nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlanid);
+gboolean nm_platform_vlan_set_flags (NMPlatform *self, int ifindex, guint32 flags);
 gboolean nm_platform_vlan_set_ingress_map (NMPlatform *self, int ifindex, int from, int to);
 gboolean nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to);
 

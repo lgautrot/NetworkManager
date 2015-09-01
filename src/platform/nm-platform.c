@@ -1538,6 +1538,17 @@ nm_platform_vlan_get_info (NMPlatform *self, int ifindex, int *parent, int *vlan
 }
 
 gboolean
+nm_platform_vlan_set_flags (NMPlatform *self, int ifindex, guint32 flags)
+{
+	_CHECK_SELF (self, klass, FALSE);
+
+	g_return_val_if_fail (klass->vlan_set_flags, FALSE);
+
+	_LOGD ("link: setting vlan flags for %d to 0x%X", ifindex, flags);
+	return klass->vlan_set_flags (self, ifindex, flags);
+}
+
+gboolean
 nm_platform_vlan_set_ingress_map (NMPlatform *self, int ifindex, int from, int to)
 {
 	_CHECK_SELF (self, klass, FALSE);
