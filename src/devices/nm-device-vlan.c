@@ -542,7 +542,11 @@ act_stage1_prepare (NMDevice *dev, NMDeviceStateReason *reason)
 	if (s_vlan) {
 		int ifindex = nm_device_get_ifindex (dev);
 		int num, i;
+		guint32 flags;
 		guint32 from, to;
+
+		flags = nm_setting_vlan_get_flags (s_vlan);
+		nm_platform_vlan_set_flags (NM_PLATFORM_GET, ifindex, flags);
 
 		num = nm_setting_vlan_get_num_priorities (s_vlan, NM_VLAN_INGRESS_MAP);
 		for (i = 0; i < num; i++) {
