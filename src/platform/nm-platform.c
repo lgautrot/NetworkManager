@@ -1669,6 +1669,43 @@ nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to
 	return nm_platform_link_vlan_change (self, ifindex, 0, 0, FALSE, NULL, 0, FALSE, &map, 1);
 }
 
+/**
+ * nm_platform_link_gre_add:
+ * @self: platform instance
+ * @name: name of the new interface
+ * @lnk_gre: interface properties
+ * @out_link: on success, the link object
+ *
+ * Create a software GRE device.
+ */
+NMPlatformError
+nm_platform_link_gre_add (NMPlatform *self,
+                          const char *name,
+                          NMPlatformLnkGre *lnk_gre,
+                          NMPlatformLink *out_link)
+{
+	NMPlatformError plerr;
+	char buffer[INET_ADDRSTRLEN];
+
+	_CHECK_SELF (self, klass, NM_PLATFORM_ERROR_BUG);
+
+	g_return_val_if_fail (lnk_gre, NM_PLATFORM_ERROR_BUG);
+	g_return_val_if_fail (name, NM_PLATFORM_ERROR_BUG);
+
+	plerr = _link_add_check_existing (self, name, NM_LINK_TYPE_GRE, out_link);
+	if (plerr != NM_PLATFORM_ERROR_SUCCESS)
+		return plerr;
+
+	_LOGD ("link: adding gre '%s' local %s remote %s",
+	        name,
+	        nm_utils_inet4_ntop (lnk_gre->local, NULL),
+	        nm_utils_inet4_ntop (lnk_gre->remote, buffer));
+
+	if (!klass->link_gre_add (self, name, lnk_gre, out_link))
+		return NM_PLATFORM_ERROR_UNSPECIFIED;
+	return NM_PLATFORM_ERROR_SUCCESS;
+}
+
 NMPlatformError
 nm_platform_infiniband_partition_add (NMPlatform *self, int parent, int p_key, NMPlatformLink *out_link)
 {
