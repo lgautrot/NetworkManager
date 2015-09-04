@@ -862,6 +862,10 @@ global:
 	nm_device_get_metered;
 	nm_device_get_nm_plugin_missing;
 	nm_device_set_managed;
+	nm_device_macvlan_get_hw_address;
+	nm_device_macvlan_get_mode;
+	nm_device_macvlan_get_parent;
+	nm_device_macvlan_get_type;
 	nm_device_wifi_request_scan_options;
 	nm_device_wifi_request_scan_options_async;
 	nm_metered_get_type;

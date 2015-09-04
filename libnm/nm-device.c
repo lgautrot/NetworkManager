@@ -41,6 +41,7 @@
 #include "nm-device-bridge.h"
 #include "nm-device-vlan.h"
 #include "nm-device-generic.h"
+#include "nm-device-macvlan.h"
 #include "nm-device.h"
 #include "nm-device-private.h"
 #include "nm-dhcp4-config.h"
@@ -318,6 +319,8 @@ _nm_device_gtype_from_dtype (NMDeviceType dtype)
 		return NM_TYPE_DEVICE_VLAN;
 	case NM_DEVICE_TYPE_GENERIC:
 		return NM_TYPE_DEVICE_GENERIC;
+	case NM_DEVICE_TYPE_MACVLAN:
+		return NM_TYPE_DEVICE_MACVLAN;
 	default:
 		g_warning ("Unknown device type %d", dtype);
 		return G_TYPE_INVALID;
