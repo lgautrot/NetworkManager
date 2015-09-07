@@ -40,6 +40,7 @@ G_BEGIN_DECLS
 
 #define NM_SETTING_IP4_CONFIG_SETTING_NAME "ipv4"
 
+
 #define NM_SETTING_IP4_CONFIG_DHCP_CLIENT_ID     "dhcp-client-id"
 #define NM_SETTING_IP4_CONFIG_DHCP_TIMEOUT       "dhcp-timeout"
 #define NM_SETTING_IP4_CONFIG_DHCP_FQDN          "dhcp-fqdn"
