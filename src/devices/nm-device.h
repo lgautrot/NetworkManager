@@ -318,7 +318,7 @@ typedef void (*NMDeviceAuthRequestFunc) (NMDevice *device,
 
 GType nm_device_get_type (void);
 
-void            nm_device_finish_init   (NMDevice *device);
+void            nm_device_finish_init   (NMDevice *device, gboolean *out_assume);
 
 const char *	nm_device_get_udi		(NMDevice *dev);
 const char *	nm_device_get_iface		(NMDevice *dev);
@@ -418,20 +418,30 @@ RfKillType nm_device_get_rfkill_type (NMDevice *device);
  * @NM_UNMANAGED_LOOPBACK: %TRUE for unmanaging loopback device
  * @NM_UNMANAGED_PLATFORM_INIT: %TRUE when unmanaged because platform link not
  *   yet initialized
- * @NM_UNMANAGED_USER: %TRUE when unmanaged by user decision (via unmanaged-specs)
- * @NM_UNMANAGED_DEFAULT: %TRUE when unmanaged by default (ie, Generic devices)
+ * @NM_UNMANAGED_USER_EXPLICIT: %TRUE when unmanaged by explicit user decision
+ *   (e.g. via a D-Bus command)
+ * @NM_UNMANAGED_BY_DEFAULT: %TRUE for certain device types where we unmanage
+ *   them by default
+ * @NM_UNMANAGED_USER_CONFIG: %TRUE when unmanaged by user decision (via unmanaged-specs)
+ * @NM_UNMANAGED_USER_UDEV: %TRUE when unmanaged by user decision (via UDev rule)
  * @NM_UNMANAGED_EXTERNAL_DOWN: %TRUE when unmanaged because !IFF_UP and not created by NM
  */
 typedef enum { /*< skip >*/
 	NM_UNMANAGED_NONE          = 0,
 
+	/* these flags are authorative. If one of them is set,
+	 * the device cannot be managed. */
 	NM_UNMANAGED_INTERNAL      = (1LL <<  0),
 	NM_UNMANAGED_PARENT        = (1LL <<  1),
 	NM_UNMANAGED_LOOPBACK      = (1LL <<  2),
 	NM_UNMANAGED_PLATFORM_INIT = (1LL <<  3),
-	NM_UNMANAGED_USER          = (1LL <<  4),
+	NM_UNMANAGED_USER_EXPLICIT = (1LL <<  4),
 
-	NM_UNMANAGED_DEFAULT       = (1LL <<  8),
+	/* These flags can be non-effective and be overwritten
+	 * by other flags. */
+	NM_UNMANAGED_BY_DEFAULT    = (1LL <<  8),
+	NM_UNMANAGED_USER_CONFIG   = (1LL <<  9),
+	NM_UNMANAGED_USER_UDEV     = (1LL << 10),
 	NM_UNMANAGED_EXTERNAL_DOWN = (1LL << 11),
 
 	/* Boundary value */
@@ -440,7 +450,9 @@ typedef enum { /*< skip >*/
 	NM_UNMANAGED_ALL           = ((NM_UNMANAGED_LAST << 1) - 1),
 } NMUnmanagedFlags;
 
-gboolean nm_device_get_managed (NMDevice *device);
+const char *nm_unmanaged_flags2str (NMUnmanagedFlags flags, char *buf, gsize len);
+
+gboolean nm_device_get_managed (NMDevice *device, gboolean for_user_request);
 NMUnmanagedFlags nm_device_get_unmanaged_flags (NMDevice *device, NMUnmanagedFlags flag);
 void nm_device_set_unmanaged_flags (NMDevice *device,
                                     NMUnmanagedFlags flag,

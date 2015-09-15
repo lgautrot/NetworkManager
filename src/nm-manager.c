@@ -764,9 +764,9 @@ remove_device (NMManager *manager,
 	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
 
 	nm_log_dbg (LOGD_DEVICE, "(%s): removing device (allow_unmanage %d, managed %d)",
-	            nm_device_get_iface (device), allow_unmanage, nm_device_get_managed (device));
+	            nm_device_get_iface (device), allow_unmanage, nm_device_get_managed (device, FALSE));
 
-	if (allow_unmanage && nm_device_get_managed (device)) {
+	if (allow_unmanage && nm_device_get_managed (device, FALSE)) {
 		NMActRequest *req = nm_device_get_act_request (device);
 		gboolean unmanage = FALSE;
 
@@ -1595,15 +1595,16 @@ recheck_assume_connection (NMDevice *device, gpointer user_data)
 {
 	NMManager *self = NM_MANAGER (user_data);
 	NMSettingsConnection *connection;
-	gboolean was_unmanaged = FALSE, success, generated;
+	gboolean success, generated;
 	NMDeviceState state;
 
 	if (manager_sleeping (self))
 		return FALSE;
-	if (nm_device_get_unmanaged_flags (device, NM_UNMANAGED_ALL & ~NM_UNMANAGED_DEFAULT))
+	if (!nm_device_get_managed (device, FALSE))
 		return FALSE;
 
 	state = nm_device_get_state (device);
+	g_return_val_if_fail (state > NM_DEVICE_STATE_UNMANAGED, FALSE);;
 	if (state > NM_DEVICE_STATE_DISCONNECTED)
 		return FALSE;
 
@@ -1614,34 +1615,12 @@ recheck_assume_connection (NMDevice *device, gpointer user_data)
 		return FALSE;
 	}
 
-	if (state == NM_DEVICE_STATE_UNMANAGED) {
-		was_unmanaged = TRUE;
-		nm_device_state_changed (device,
-		                         NM_DEVICE_STATE_UNAVAILABLE,
-		                         NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED);
-	}
-
 	success = assume_connection (self, device, connection);
-	if (!success) {
-		if (was_unmanaged) {
-			nm_device_state_changed (device,
-			                         NM_DEVICE_STATE_UNAVAILABLE,
-			                         NM_DEVICE_STATE_REASON_CONFIG_FAILED);
+	if (!success && generated) {
+		nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
+		            nm_device_get_iface (device));
 
-			/* Return default-unmanaged devices to their original state */
-			if (nm_device_get_unmanaged_flags (device, NM_UNMANAGED_DEFAULT)) {
-				nm_device_state_changed (device,
-				                         NM_DEVICE_STATE_UNMANAGED,
-				                         NM_DEVICE_STATE_REASON_CONFIG_FAILED);
-			}
-		}
-
-		if (generated) {
-			nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
-			            nm_device_get_iface (device));
-
-			nm_settings_connection_delete (connection, NULL, NULL);
-		}
+		nm_settings_connection_delete (connection, NULL, NULL);
 	}
 
 	return success;
@@ -1698,13 +1677,13 @@ add_device (NMManager *self, NMDevice *device, gboolean try_assume)
 	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (self);
 	const char *iface, *driver, *type_desc;
 	const GSList *unmanaged_specs;
-	gboolean user_unmanaged, sleeping;
+	gboolean sleeping;
 	gboolean enabled = FALSE;
 	RfKillType rtype;
 	GSList *iter, *remove = NULL;
-	gboolean connection_assumed = FALSE;
 	int ifindex;
 	const char *dbus_path;
+	gboolean assume;
 
 	/* No duplicates */
 	ifindex = nm_device_get_ifindex (device);
@@ -1784,8 +1763,9 @@ add_device (NMManager *self, NMDevice *device, gboolean try_assume)
 	             driver, nm_device_get_ifindex (device));
 
 	unmanaged_specs = nm_settings_get_unmanaged_specs (priv->settings);
-	user_unmanaged = nm_device_spec_match_list (device, unmanaged_specs);
-	nm_device_set_unmanaged_flags_initial (device, NM_UNMANAGED_USER, user_unmanaged);
+	nm_device_set_unmanaged_flags_initial (device,
+	                                       NM_UNMANAGED_USER_CONFIG,
+	                                       nm_device_spec_match_list (device, unmanaged_specs));
 
 	sleeping = manager_sleeping (self);
 	nm_device_set_unmanaged_flags_initial (device, NM_UNMANAGED_INTERNAL, sleeping);
@@ -1793,18 +1773,27 @@ add_device (NMManager *self, NMDevice *device, gboolean try_assume)
 	dbus_path = nm_exported_object_export (NM_EXPORTED_OBJECT (device));
 	nm_log_dbg (LOGD_DEVICE, "(%s): exported as %s", nm_device_get_iface (device), dbus_path);
 
-	nm_device_finish_init (device);
+	nm_device_finish_init (device, &assume);
 
-	if (try_assume) {
-		connection_assumed = recheck_assume_connection (device, self);
-		g_signal_connect (device, NM_DEVICE_RECHECK_ASSUME,
-		                  G_CALLBACK (recheck_assume_connection), self);
-	}
+	if (nm_device_get_managed (device, FALSE)) {
+		NMDeviceStateReason reason = try_assume && assume
+		                             ? NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED
+		                             : NM_DEVICE_STATE_REASON_NOW_MANAGED;
 
-	if (!connection_assumed && nm_device_get_managed (device)) {
 		nm_device_state_changed (device,
 		                         NM_DEVICE_STATE_UNAVAILABLE,
-		                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
+		                         reason);
+
+		if (try_assume) {
+			g_signal_connect (device, NM_DEVICE_RECHECK_ASSUME,
+			                  G_CALLBACK (recheck_assume_connection), self);
+
+			if (!recheck_assume_connection (device, self)) {
+				nm_device_state_changed (device,
+				                         NM_DEVICE_STATE_UNAVAILABLE,
+				                         reason);
+			}
+		}
 	}
 
 	/* Try to generate a default connection. If this fails because the link is
