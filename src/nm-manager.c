@@ -760,9 +760,9 @@ remove_device (NMManager *manager,
 	NMManagerPrivate *priv = NM_MANAGER_GET_PRIVATE (manager);
 
 	nm_log_dbg (LOGD_DEVICE, "(%s): removing device (allow_unmanage %d, managed %d)",
-	            nm_device_get_iface (device), allow_unmanage, nm_device_get_managed (device));
+	            nm_device_get_iface (device), allow_unmanage, !nm_device_get_unmanaged (device, NM_UNMANAGED_ALL));
 
-	if (allow_unmanage && nm_device_get_managed (device)) {
+	if (allow_unmanage && !nm_device_get_unmanaged (device, NM_UNMANAGED_ALL)) {
 		NMActRequest *req = nm_device_get_act_request (device);
 		gboolean unmanage = FALSE;
 
@@ -1592,15 +1592,16 @@ recheck_assume_connection (NMDevice *device, gpointer user_data)
 {
 	NMManager *self = NM_MANAGER (user_data);
 	NMSettingsConnection *connection;
-	gboolean was_unmanaged = FALSE, success, generated;
+	gboolean success, generated;
 	NMDeviceState state;
 
 	if (manager_sleeping (self))
 		return FALSE;
-	if (nm_device_get_unmanaged (device, NM_UNMANAGED_ALL & ~NM_UNMANAGED_DEFAULT))
+	if (!nm_device_get_managed (device))
 		return FALSE;
 
 	state = nm_device_get_state (device);
+	g_return_val_if_fail (state > NM_DEVICE_STATE_UNMANAGED, FALSE);;
 	if (state > NM_DEVICE_STATE_DISCONNECTED)
 		return FALSE;
 
@@ -1611,34 +1612,12 @@ recheck_assume_connection (NMDevice *device, gpointer user_data)
 		return FALSE;
 	}
 
-	if (state == NM_DEVICE_STATE_UNMANAGED) {
-		was_unmanaged = TRUE;
-		nm_device_state_changed (device,
-		                         NM_DEVICE_STATE_UNAVAILABLE,
-		                         NM_DEVICE_STATE_REASON_CONNECTION_ASSUMED);
-	}
-
 	success = assume_connection (self, device, connection);
-	if (!success) {
-		if (was_unmanaged) {
-			nm_device_state_changed (device,
-			                         NM_DEVICE_STATE_UNAVAILABLE,
-			                         NM_DEVICE_STATE_REASON_CONFIG_FAILED);
+	if (!success && generated) {
+		nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
+		            nm_device_get_iface (device));
 
-			/* Return default-unmanaged devices to their original state */
-			if (nm_device_get_unmanaged (device, NM_UNMANAGED_DEFAULT)) {
-				nm_device_state_changed (device,
-				                         NM_DEVICE_STATE_UNMANAGED,
-				                         NM_DEVICE_STATE_REASON_CONFIG_FAILED);
-			}
-		}
-
-		if (generated) {
-			nm_log_dbg (LOGD_DEVICE, "(%s): connection assumption failed. Deleting generated connection",
-			            nm_device_get_iface (device));
-
-			nm_settings_connection_delete (connection, NULL, NULL);
-		}
+		nm_settings_connection_delete (connection, NULL, NULL);
 	}
 
 	return success;
@@ -1699,7 +1678,6 @@ add_device (NMManager *self, NMDevice *device, gboolean try_assume)
 	gboolean enabled = FALSE;
 	RfKillType rtype;
 	GSList *iter, *remove = NULL;
-	gboolean connection_assumed = FALSE;
 	int ifindex;
 	const char *dbus_path;
 
@@ -1782,7 +1760,12 @@ add_device (NMManager *self, NMDevice *device, gboolean try_assume)
 
 	unmanaged_specs = nm_settings_get_unmanaged_specs (priv->settings);
 	user_unmanaged = nm_device_spec_match_list (device, unmanaged_specs);
-	nm_device_set_unmanaged_initial (device, NM_UNMANAGED_USER, user_unmanaged);
+	if (user_unmanaged) {
+		/* We might have NM_UNMANAGED_USER already set (e.g. NMDeviceGeneric
+		 * sets it by default. Hence, we only want to set the flag depending
+		 * on user_unmanaged, but we don't want to clear it. */
+		nm_device_set_unmanaged_initial (device, NM_UNMANAGED_USER, TRUE);
+	}
 
 	sleeping = manager_sleeping (self);
 	nm_device_set_unmanaged_initial (device, NM_UNMANAGED_INTERNAL, sleeping);
@@ -1792,16 +1775,21 @@ add_device (NMManager *self, NMDevice *device, gboolean try_assume)
 
 	nm_device_finish_init (device);
 
-	if (try_assume) {
-		connection_assumed = recheck_assume_connection (device, self);
-		g_signal_connect (device, NM_DEVICE_RECHECK_ASSUME,
-		                  G_CALLBACK (recheck_assume_connection), self);
-	}
-
-	if (!connection_assumed && nm_device_get_managed (device)) {
+	if (!nm_device_get_unmanaged (device, NM_UNMANAGED_ALL)) {
 		nm_device_state_changed (device,
 		                         NM_DEVICE_STATE_UNAVAILABLE,
 		                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
+
+		if (try_assume) {
+			g_signal_connect (device, NM_DEVICE_RECHECK_ASSUME,
+			                  G_CALLBACK (recheck_assume_connection), self);
+
+			if (!recheck_assume_connection (device, self)) {
+				nm_device_state_changed (device,
+				                         NM_DEVICE_STATE_UNAVAILABLE,
+				                         NM_DEVICE_STATE_REASON_NOW_MANAGED);
+			}
+		}
 	}
 
 	/* Try to generate a default connection. If this fails because the link is
