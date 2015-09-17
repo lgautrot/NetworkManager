@@ -202,6 +202,7 @@ NMSettingGsm *             nm_connection_get_setting_gsm               (NMConnec
 NMSettingInfiniband *      nm_connection_get_setting_infiniband        (NMConnection *connection);
 NMSettingIPConfig *        nm_connection_get_setting_ip4_config        (NMConnection *connection);
 NMSettingIPConfig *        nm_connection_get_setting_ip6_config        (NMConnection *connection);
+NMSettingMacvlan *         nm_connection_get_setting_macvlan           (NMConnection *connection);
 NMSettingOlpcMesh *        nm_connection_get_setting_olpc_mesh         (NMConnection *connection);
 NMSettingPpp *             nm_connection_get_setting_ppp               (NMConnection *connection);
 NMSettingPppoe *           nm_connection_get_setting_pppoe             (NMConnection *connection);
