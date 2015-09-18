@@ -205,17 +205,24 @@ gboolean      nm_setting_ip_config_remove_dns_search_by_value (NMSettingIPConfig
                                                                const char        *dns_search);
 void          nm_setting_ip_config_clear_dns_searches         (NMSettingIPConfig *setting);
 
+NM_AVAILABLE_IN_1_0_8
 guint         nm_setting_ip_config_get_num_dns_options        (NMSettingIPConfig *setting);
+NM_AVAILABLE_IN_1_0_8
 const char   *nm_setting_ip_config_get_dns_option             (NMSettingIPConfig *setting,
                                                                guint              idx);
+NM_AVAILABLE_IN_1_0_8
 gint          nm_setting_ip_config_next_valid_dns_option      (NMSettingIPConfig *setting,
                                                                guint              idx);
+NM_AVAILABLE_IN_1_0_8
 gboolean      nm_setting_ip_config_add_dns_option             (NMSettingIPConfig *setting,
                                                                const char        *dns_option);
+NM_AVAILABLE_IN_1_0_8
 void          nm_setting_ip_config_remove_dns_option          (NMSettingIPConfig *setting,
                                                                int                idx);
+NM_AVAILABLE_IN_1_0_8
 gboolean      nm_setting_ip_config_remove_dns_option_by_value (NMSettingIPConfig *setting,
                                                                const char        *dns_option);
+NM_AVAILABLE_IN_1_0_8
 void          nm_setting_ip_config_clear_dns_options          (NMSettingIPConfig *setting);
 
 guint         nm_setting_ip_config_get_num_addresses          (NMSettingIPConfig *setting);
