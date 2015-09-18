@@ -682,6 +682,18 @@ NmcOutputField nmc_fields_setting_dcb[] = {
                                        NM_SETTING_DCB_PRIORITY_TRAFFIC_CLASS
 #define NMC_FIELDS_SETTING_DCB_COMMON  NMC_FIELDS_SETTING_DCB_ALL
 
+/* Available fields for NM_SETTING_MACVLAN_SETTING_NAME */
+NmcOutputField nmc_fields_setting_macvlan[] = {
+	SETTING_FIELD ("name"),                                 /* 0 */
+	SETTING_FIELD (NM_SETTING_MACVLAN_PARENT),              /* 1 */
+	SETTING_FIELD (NM_SETTING_MACVLAN_MODE),                /* 2 */
+	{NULL, NULL, 0, NULL, FALSE, FALSE, 0}
+};
+#define NMC_FIELDS_SETTING_MACVLAN_ALL     "name"","\
+                                           NM_SETTING_MACVLAN_PARENT","\
+                                           NM_SETTING_MACVLAN_MODE
+#define NMC_FIELDS_SETTING_MACVLAN_COMMON  NMC_FIELDS_SETTING_MACVLAN_ALL
+
 /*----------------------------------------------------------------------------*/
 
 static char *
@@ -1716,6 +1728,57 @@ nmc_property_wifi_sec_get_wep_key_type (NMSetting *setting, NmcPropertyGetType g
 {
 	NMSettingWirelessSecurity *s_wireless_sec = NM_SETTING_WIRELESS_SECURITY (setting);
 	return wep_key_type_to_string (nm_setting_wireless_security_get_wep_key_type (s_wireless_sec));
+}
+
+/* --- NM_SETTING_MACVLAN_SETTING_NAME property get functions --- */
+DEFINE_GETTER (nmc_property_macvlan_get_parent, NM_SETTING_MACVLAN_PARENT)
+
+static char *
+nmc_property_macvlan_get_mode (NMSetting *setting, NmcPropertyGetType get_type)
+{
+	NMSettingMacvlan *s_macvlan = NM_SETTING_MACVLAN (setting);
+	NMSettingMacvlanMode mode;
+	char *tmp, *str;
+
+	mode = nm_setting_macvlan_get_mode (s_macvlan);
+	tmp = nm_utils_enum_to_str (nm_setting_macvlan_mode_get_type (), mode);
+
+	if (get_type == NMC_PROPERTY_GET_PARSABLE)
+		str = g_strdup (tmp ? tmp : "");
+	else
+		str = g_strdup_printf ("%d (%s)", mode, tmp ? tmp : "");
+	g_free (tmp);
+
+	return str;
+}
+
+static gboolean
+nmc_property_macvlan_set_mode (NMSetting *setting, const char *prop,
+                               const char *val, GError **error)
+{
+	NMSettingMacvlanMode mode;
+	gs_free const char **options = NULL;
+	gs_free char *options_str = NULL;
+	long int t;
+	gboolean ret;
+
+	if (nmc_string_to_int_base (val, 0, TRUE, 0, _NM_SETTING_MACVLAN_MODE_NUM - 1, &t))
+		mode = (NMSettingMacvlanMode) t;
+	else {
+		ret = nm_utils_enum_from_str (nm_setting_macvlan_mode_get_type (), val,
+		                              (int *) &mode, NULL);
+
+		if (!ret) {
+				options = nm_utils_enum_get_values (nm_setting_macvlan_mode_get_type(), 0, G_MAXINT);
+				options_str = g_strjoinv (", ", (char **) options);
+				g_set_error (error, 1, 0, _("invalid option '%s', use one of %s"),
+				             val, options_str);
+				return FALSE;
+			}
+		}
+
+	g_object_set (setting, prop, (guint) mode, NULL);
+	return TRUE;
 }
 
 /*----------------------------------------------------------------------------*/
@@ -6696,6 +6759,22 @@ nmc_properties_init (void)
 	                    NULL,
 	                    NULL,
 	                    NULL);
+
+	/* Add editable properties for NM_SETTING_MACVLAN_SETTING_NAME */
+	nmc_add_prop_funcs (GLUE (MACVLAN, PARENT),
+	                    nmc_property_macvlan_get_parent,
+	                    nmc_property_set_string,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
+	nmc_add_prop_funcs (GLUE (MACVLAN, MODE),
+	                    nmc_property_macvlan_get_mode,
+	                    nmc_property_macvlan_set_mode,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
 }
 
 void
@@ -7837,6 +7916,33 @@ setting_dcb_details (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboo
 	return TRUE;
 }
 
+static gboolean
+setting_macvlan_details (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboolean secrets)
+{
+	NMSettingMacvlan *s_macvlan = NM_SETTING_MACVLAN (setting);
+	NmcOutputField *tmpl, *arr;
+	size_t tmpl_len;
+
+	g_return_val_if_fail (NM_IS_SETTING_MACVLAN (s_macvlan), FALSE);
+
+	tmpl = nmc_fields_setting_macvlan;
+	tmpl_len = sizeof (nmc_fields_setting_macvlan);
+	nmc->print_fields.indices = parse_output_fields (one_prop ? one_prop : NMC_FIELDS_SETTING_MACVLAN_ALL,
+	                                                 tmpl, FALSE, NULL, NULL);
+	arr = nmc_dup_fields_array (tmpl, tmpl_len, NMC_OF_FLAG_FIELD_NAMES);
+	g_ptr_array_add (nmc->output_data, arr);
+
+	arr = nmc_dup_fields_array (tmpl, tmpl_len, NMC_OF_FLAG_SECTION_PREFIX);
+	set_val_str (arr, 0, g_strdup (nm_setting_get_name (setting)));
+	set_val_str (arr, 1, nmc_property_macvlan_get_parent (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 2, nmc_property_macvlan_get_mode (setting, NMC_PROPERTY_GET_PRETTY));
+	g_ptr_array_add (nmc->output_data, arr);
+
+	print_data (nmc);  /* Print all data */
+
+	return TRUE;
+}
+
 typedef struct {
 	const char *sname;
 	gboolean (*func) (NMSetting *setting, NmCli *nmc,  const char *one_prop, gboolean secrets);
@@ -7868,6 +7974,7 @@ static const SettingDetails detail_printers[] = {
 	{ NM_SETTING_TEAM_SETTING_NAME,              setting_team_details },
 	{ NM_SETTING_TEAM_PORT_SETTING_NAME,         setting_team_port_details },
 	{ NM_SETTING_DCB_SETTING_NAME,               setting_dcb_details },
+	{ NM_SETTING_MACVLAN_SETTING_NAME,           setting_macvlan_details },
 	{ NULL },
 };
 
