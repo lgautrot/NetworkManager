@@ -1471,7 +1471,10 @@ device_link_changed (NMDevice *self)
 					 */
 					_set_unmanaged_flags (self, NM_UNMANAGED_EXTERNAL_DOWN, FALSE);
 				}
-			} else if (!external_down && !NM_FLAGS_HAS (info.flags, IFF_UP) && nm_device_get_state (self) <= NM_DEVICE_STATE_DISCONNECTED) {
+			} else if (   !external_down
+			           && !NM_FLAGS_HAS (info.flags, IFF_UP)
+			           && !priv->managed_touched_by_user
+			           && nm_device_get_state (self) <= NM_DEVICE_STATE_DISCONNECTED) {
 				/* If the device is already disconnected and is set !IFF_UP,
 				 * unmanage it.
 				 */
@@ -1488,7 +1491,8 @@ device_link_changed (NMDevice *self)
 
 		priv->platform_link_initialized = TRUE;
 
-		if (nm_platform_link_get_unmanaged (NM_PLATFORM_GET, priv->ifindex, &platform_unmanaged)) {
+		if (   !priv->managed_touched_by_user
+		    && nm_platform_link_get_unmanaged (NM_PLATFORM_GET, priv->ifindex, &platform_unmanaged)) {
 			nm_device_set_unmanaged (self,
 			                         NM_UNMANAGED_DEFAULT,
 			                         platform_unmanaged,
@@ -9480,7 +9484,6 @@ set_property (GObject *object, guint prop_id,
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 	const char *hw_addr, *p;
 	guint count;
-	gboolean val_bool;
 
 	switch (prop_id) {
 	case PROP_UDI:
@@ -9518,13 +9521,19 @@ set_property (GObject *object, guint prop_id,
 	case PROP_IP4_ADDRESS:
 		priv->ip4_address = g_value_get_uint (value);
 		break;
-	case PROP_MANAGED:
-		val_bool = g_value_get_boolean (value);
-		priv->managed_touched_by_user = TRUE;
-		nm_device_set_unmanaged (self,
-		                         NM_UNMANAGED_USER | (val_bool ? NM_UNMANAGED_DEFAULT : NM_UNMANAGED_NONE),
-		                         !val_bool,
-		                         NM_DEVICE_STATE_REASON_USER_REQUESTED);
+	case PROP_MANAGED: {
+			gboolean set_flags;
+
+			set_flags = !g_value_get_boolean (value);
+
+			priv->managed_touched_by_user = TRUE;
+			nm_device_set_unmanaged (self,
+			                         set_flags
+			                             ? NM_UNMANAGED_USER
+			                             : _NM_UNMANAGED_USER_SETTABLE,
+			                         set_flags,
+			                         NM_DEVICE_STATE_REASON_USER_REQUESTED);
+		}
 		break;
 	case PROP_AUTOCONNECT:
 		nm_device_set_autoconnect (self, g_value_get_boolean (value));

@@ -417,7 +417,7 @@ RfKillType nm_device_get_rfkill_type (NMDevice *device);
  *   yet initialized
  * @NM_UNMANAGED_LOOPBACK: %TRUE for unmanaging loopback device
  */
-typedef enum {
+typedef enum { /*< skip >*/
 	NM_UNMANAGED_NONE          = 0,
 	NM_UNMANAGED_DEFAULT       = (1LL <<  0),
 	NM_UNMANAGED_INTERNAL      = (1LL <<  1),
@@ -431,6 +431,12 @@ typedef enum {
 	__NM_UNMANAGED_LAST,
 	NM_UNMANAGED_LAST          = __NM_UNMANAGED_LAST - 1,
 	NM_UNMANAGED_ALL           = ((NM_UNMANAGED_LAST << 1) - 1),
+
+	/* these flags can be cleared by the user via NMDevice:managed */
+	_NM_UNMANAGED_USER_SETTABLE = (  NM_UNMANAGED_USER
+	                               | NM_UNMANAGED_DEFAULT
+	                               | NM_UNMANAGED_EXTERNAL_DOWN),
+
 } NMUnmanagedFlags;
 
 gboolean nm_device_get_managed (NMDevice *device);
