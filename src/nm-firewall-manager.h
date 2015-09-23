@@ -71,8 +71,10 @@ NMFirewallManagerCallId nm_firewall_manager_add_or_change_zone (NMFirewallManage
                                                                 gpointer user_data);
 NMFirewallManagerCallId nm_firewall_manager_remove_from_zone (NMFirewallManager *mgr,
                                                               const char *iface,
-                                                              const char *zone);
+                                                              const char *zone,
+                                                              NMFirewallManagerAddRemoveCallback callback,
+                                                              gpointer user_data);
 
-void nm_firewall_manager_cancel_call (NMFirewallManager *mgr, NMFirewallManagerCallId fw_call);
+void nm_firewall_manager_cancel_call (NMFirewallManagerCallId fw_call);
 
 #endif /* __NETWORKMANAGER_FIREWALL_MANAGER_H__ */
