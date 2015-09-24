@@ -9001,6 +9001,7 @@ _set_state_full (NMDevice *self,
 
 			s_con = nm_connection_get_setting_connection (applied_connection);
 			zone = nm_setting_connection_get_zone (s_con);
+			g_assert (!priv->fw_call);
 			priv->fw_call = nm_firewall_manager_add_or_change_zone (nm_firewall_manager_get (),
 			                                                        nm_device_get_ip_iface (self),
 			                                                        zone,
