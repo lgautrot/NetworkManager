@@ -73,6 +73,7 @@ typedef enum {
 
 struct _NMFirewallManagerCallId {
 	NMFirewallManager *self;
+	gboolean keep_mgr_alive;
 	CBInfoOpsType ops_type;
 	CBInfoMode mode;
 	char *iface;
@@ -144,6 +145,7 @@ static CBInfo *
 _cb_info_create (NMFirewallManager *self,
                  CBInfoOpsType ops_type,
                  const char *iface,
+                 gboolean keep_mgr_alive,
                  NMFirewallManagerAddRemoveCallback callback,
                  gpointer user_data)
 {
@@ -152,10 +154,14 @@ _cb_info_create (NMFirewallManager *self,
 
 	info = g_slice_new0 (CBInfo);
 	info->self = self;
+	info->keep_mgr_alive = keep_mgr_alive;
 	info->ops_type = ops_type;
 	info->iface = g_strdup (iface);
 	info->callback = callback;
 	info->user_data = user_data;
+
+	if (keep_mgr_alive)
+		g_object_ref (self);
 
 	if (priv->running) {
 		info->mode = CB_INFO_MODE_DBUS;
@@ -175,6 +181,8 @@ _cb_info_free (CBInfo *info)
 	if (!_cb_info_is_idle (info))
 		g_object_unref (info->dbus.cancellable);
 	g_free (info->iface);
+	if (info->keep_mgr_alive)
+		g_object_unref (info->self);
 	g_slice_free (CBInfo, info);
 }
 
@@ -216,6 +224,10 @@ _cb_info_complete_cancel (CBInfo *info, gboolean is_disposing)
 	} else {
 		info->mode = CB_INFO_MODE_DBUS_COMPLETED;
 		g_cancellable_cancel (info->dbus.cancellable);
+		if (info->keep_mgr_alive) {
+			info->keep_mgr_alive = FALSE;
+			g_object_unref (self);
+		}
 	}
 }
 
@@ -286,6 +298,7 @@ _start_request (NMFirewallManager *self,
                 CBInfoOpsType ops_type,
                 const char *iface,
                 const char *zone,
+                gboolean keep_mgr_alive,
                 NMFirewallManagerAddRemoveCallback callback,
                 gpointer user_data)
 {
@@ -298,7 +311,7 @@ _start_request (NMFirewallManager *self,
 
 	priv = NM_FIREWALL_MANAGER_GET_PRIVATE (self);
 
-	info = _cb_info_create (self, ops_type, iface, callback, user_data);
+	info = _cb_info_create (self, ops_type, iface, keep_mgr_alive, callback, user_data);
 
 	_LOGD (info, "firewall zone %s %s:%s%s%s%s",
 	       _ops_type_to_string (info->ops_type),
@@ -357,6 +370,7 @@ nm_firewall_manager_add_or_change_zone (NMFirewallManager *self,
                                         const char *iface,
                                         const char *zone,
                                         gboolean add, /* TRUE == add, FALSE == change */
+                                        gboolean keep_mgr_alive,
                                         NMFirewallManagerAddRemoveCallback callback,
                                         gpointer user_data)
 {
@@ -364,6 +378,7 @@ nm_firewall_manager_add_or_change_zone (NMFirewallManager *self,
 	                       add ? CB_INFO_OPS_ADD : CB_INFO_OPS_CHANGE,
 	                       iface,
 	                       zone,
+	                       keep_mgr_alive,
 	                       callback,
 	                       user_data);
 }
@@ -372,6 +387,7 @@ NMFirewallManagerCallId
 nm_firewall_manager_remove_from_zone (NMFirewallManager *self,
                                       const char *iface,
                                       const char *zone,
+                                      gboolean keep_mgr_alive,
                                       NMFirewallManagerAddRemoveCallback callback,
                                       gpointer user_data)
 {
@@ -379,6 +395,7 @@ nm_firewall_manager_remove_from_zone (NMFirewallManager *self,
 	                       CB_INFO_OPS_REMOVE,
 	                       iface,
 	                       zone,
+	                       keep_mgr_alive,
 	                       callback,
 	                       user_data);
 }

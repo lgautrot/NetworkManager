@@ -5592,6 +5592,7 @@ nm_device_activate_schedule_stage3_ip_config_start (NMDevice *self)
 	                                                        nm_device_get_ip_iface (self),
 	                                                        zone,
 	                                                        FALSE,
+	                                                        TRUE,
 	                                                        fw_change_zone_cb,
 	                                                        self);
 }
@@ -7939,6 +7940,7 @@ nm_device_update_firewall_zone (NMDevice *self)
 		                                        nm_device_get_ip_iface (self),
 		                                        nm_setting_connection_get_zone (s_con),
 		                                        FALSE, /* change zone */
+		                                        TRUE,
 		                                        NULL,
 		                                        NULL);
 	}
@@ -8341,6 +8343,7 @@ _cleanup_generic_pre (NMDevice *self, CleanupType cleanup_type)
 		nm_firewall_manager_remove_from_zone (nm_firewall_manager_get (),
 		                                      nm_device_get_ip_iface (self),
 		                                      NULL,
+		                                      TRUE,
 		                                      NULL,
 		                                      NULL);
 	}

@@ -348,6 +348,7 @@ vpn_cleanup (NMVpnConnection *self, NMDevice *parent_dev)
 		nm_firewall_manager_remove_from_zone (nm_firewall_manager_get (),
 		                                      priv->ip_iface,
 		                                      NULL,
+		                                      TRUE,
 		                                      NULL,
 		                                      NULL);
 	}
@@ -1162,6 +1163,7 @@ nm_vpn_connection_config_maybe_complete (NMVpnConnection *self,
 			                                                        priv->ip_iface,
 			                                                        zone,
 			                                                        FALSE,
+			                                                        TRUE,
 			                                                        fw_change_zone_cb,
 			                                                        self);
 			return;
