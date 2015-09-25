@@ -701,22 +701,12 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		return FALSE;
 	}
 
-	if (   NM_FLAGS_HAS (priv->wol, NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT)
-	    && priv->wol != NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT) {
+	if (   NM_FLAGS_ANY (priv->wol, NM_SETTING_WIRED_WAKE_ON_LAN_EXCLUSIVE_FLAGS)
+	    && !nm_utils_is_power_of_two (priv->wol)) {
 		g_set_error_literal (error,
 		                     NM_CONNECTION_ERROR,
 		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		                     _("Wake-on-LAN mode 'default' is incompatible with other flags"));
-		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRED_SETTING_NAME, NM_SETTING_WIRED_WAKE_ON_LAN);
-		return FALSE;
-	}
-
-	if (   NM_FLAGS_HAS (priv->wol, NM_SETTING_WIRED_WAKE_ON_LAN_IGNORE)
-	    && priv->wol != NM_SETTING_WIRED_WAKE_ON_LAN_IGNORE) {
-		g_set_error_literal (error,
-		                     NM_CONNECTION_ERROR,
-		                     NM_CONNECTION_ERROR_INVALID_PROPERTY,
-		                     _("Wake-on-LAN mode 'ignore' is incompatible with other flags"));
+		                     _("Wake-on-LAN mode 'default' and 'ignore' are exclusive flags"));
 		g_prefix_error (error, "%s.%s: ", NM_SETTING_WIRED_SETTING_NAME, NM_SETTING_WIRED_WAKE_ON_LAN);
 		return FALSE;
 	}
