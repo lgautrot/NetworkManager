@@ -1237,9 +1237,9 @@ wake_on_lan_enable (NMDevice *device)
 		                                    G_MAXINT32,
 		                                    NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT);
 
-		if (NM_FLAGS_ANY (wol, NM_SETTING_WIRED_WAKE_ON_LAN_EXCLUSIVE_FLAGS)
+		if (   NM_FLAGS_ANY (wol, NM_SETTING_WIRED_WAKE_ON_LAN_EXCLUSIVE_FLAGS)
 		    && !nm_utils_is_power_of_two (wol)) {
-			nm_log_dbg (LOGD_ETHER, "invalid default value %d for wake-on-lan", (int) wol);
+			nm_log_dbg (LOGD_ETHER, "invalid default value %u for wake-on-lan", (guint) wol);
 			wol = NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT;
 		}
 		if (wol != NM_SETTING_WIRED_WAKE_ON_LAN_DEFAULT)
