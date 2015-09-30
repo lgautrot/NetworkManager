@@ -530,6 +530,12 @@ AC_CHECK_LIB([nl-route-3], [rtnl_link_inet6_get_addr_gen_mode],
 AC_DEFINE_UNQUOTED(HAVE_LIBNL_INET6_ADDR_GEN_MODE,
 	$ac_have_addr_gen_mode, [Define if libnl has rtnl_link_inet6_get_addr_gen_mode()])
 
+AC_CHECK_LIB([nl-route-3], [rtnl_link_macvlan_alloc],
+	ac_have_libnl_macvlan="1",
+	ac_have_libnl_macvlan="0")
+AC_DEFINE_UNQUOTED(HAVE_LIBNL_MACVLAN,
+	$ac_have_libnl_macvlan, [Define if libnl has macvlan support])
+
 AC_MSG_CHECKING([Linux kernel IN6_ADDR_GEN_MODE enum])
 AC_COMPILE_IFELSE(
 	[AC_LANG_PROGRAM(

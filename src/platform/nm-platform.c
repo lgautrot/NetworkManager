@@ -1435,6 +1435,7 @@ nm_platform_team_add (NMPlatform *self, const char *name, NMPlatformLink *out_li
  * nm_platform_vlan_add:
  * @self: platform instance
  * @name: New interface name
+ * @parent: the parent interface
  * @vlanid: VLAN identifier
  * @vlanflags: VLAN flags from libnm
  * @out_link: on success, the link object
@@ -1465,6 +1466,37 @@ nm_platform_vlan_add (NMPlatform *self,
 	_LOGD ("link: adding vlan '%s' parent %d vlanid %d vlanflags %x",
 	       name, parent, vlanid, vlanflags);
 	if (!klass->vlan_add (self, name, parent, vlanid, vlanflags, out_link))
+		return NM_PLATFORM_ERROR_UNSPECIFIED;
+	return NM_PLATFORM_ERROR_SUCCESS;
+}
+
+/**
+ * nm_platform_macvlan_add:
+ * @self: platform instance
+ * @name: new interface name
+ * @parent: the parent interface
+ * @mode: a MAC-VLAN mode as MACVLAN_MODE_VEPA, MACVLAN_MODE_BRIDGE, etc.
+ * @out_link: on success, the link object
+ *
+ * Create a MAC-VLAN interface.
+ */
+NMPlatformError
+nm_platform_macvlan_add (NMPlatform *self, const char *name, int parent, int mode,
+                         NMPlatformLink *out_link)
+{
+	NMPlatformError plerr;
+
+	_CHECK_SELF (self, klass, NM_PLATFORM_ERROR_BUG);
+
+	g_return_val_if_fail (name, NM_PLATFORM_ERROR_BUG);
+	g_return_val_if_fail (klass->macvlan_add, NM_PLATFORM_ERROR_BUG);
+
+	plerr = _link_add_check_existing (self, name, NM_LINK_TYPE_MACVLAN, out_link);
+	if (plerr != NM_PLATFORM_ERROR_SUCCESS)
+		return plerr;
+
+	_LOGD ("link: adding macvlan '%s', parent %d mode %d", name, parent, mode);
+	if (!klass->macvlan_add (self, name, parent, mode, out_link))
 		return NM_PLATFORM_ERROR_UNSPECIFIED;
 	return NM_PLATFORM_ERROR_SUCCESS;
 }

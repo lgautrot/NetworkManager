@@ -50,6 +50,10 @@
 #endif
 #endif
 
+#if HAVE_LIBNL_MACVLAN
+#include <netlink/route/link/macvlan.h>
+#endif
+
 #include "nm-core-internal.h"
 #include "NetworkManagerUtils.h"
 #include "nm-linux-platform.h"
@@ -3266,6 +3270,25 @@ vlan_set_egress_map (NMPlatform *platform, int ifindex, int from, int to)
 	return do_change_link (platform, change, TRUE) == NM_PLATFORM_ERROR_SUCCESS;
 }
 
+static int
+macvlan_add (NMPlatform *platform, const char *name, int parent, int mode, NMPlatformLink *out_link)
+{
+#if HAVE_LIBNL_MACVLAN
+	auto_nl_object struct rtnl_link *rtnllink;
+
+	rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, NM_LINK_TYPE_MACVLAN);
+	rtnl_link_macvlan_set_mode (rtnllink, mode);
+	rtnl_link_set_link (rtnllink, parent);
+
+	_LOGD ("link: add macvlan '%s', parent %d, mode %d", name, parent, mode);
+
+	return do_add_link_with_lookup (platform, name, rtnllink, NM_LINK_TYPE_MACVLAN, out_link);
+#else
+	_LOGW ("link: add macvlan '%s', parent %d, mode %d: MAC-VLAN support disabled", name, parent, mode);
+	return FALSE;
+#endif
+}
+
 static gboolean
 link_enslave (NMPlatform *platform, int master, int slave)
 {
@@ -5082,6 +5105,8 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 	platform_class->vlan_get_info = vlan_get_info;
 	platform_class->vlan_set_ingress_map = vlan_set_ingress_map;
 	platform_class->vlan_set_egress_map = vlan_set_egress_map;
+
+	platform_class->macvlan_add = macvlan_add;
 
 	platform_class->infiniband_partition_add = infiniband_partition_add;
 	platform_class->infiniband_get_info = infiniband_get_info;
