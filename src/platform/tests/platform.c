@@ -407,7 +407,7 @@ do_macvlan_get_properties (char **argv)
 		return FALSE;
 
 	printf ("parent: %d\n", props.parent_ifindex);
-	printf ("mode: %s\n", props.mode);
+	printf ("mode: %d\n", props.mode);
 	printf ("no-promisc: ");
 	print_boolean (props.no_promisc);
 	return TRUE;

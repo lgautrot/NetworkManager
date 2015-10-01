@@ -39,6 +39,7 @@ G_DEFINE_TYPE (NMDeviceMacvlan, nm_device_macvlan, NM_TYPE_DEVICE_GENERIC)
 #define NM_DEVICE_MACVLAN_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_MACVLAN, NMDeviceMacvlanPrivate))
 
 typedef struct {
+	char *mode;
 	NMPlatformMacvlanProperties props;
 } NMDeviceMacvlanPrivate;
 
@@ -72,8 +73,27 @@ update_properties (NMDevice *device)
 
 	if (priv->props.parent_ifindex != props.parent_ifindex)
 		g_object_notify (object, NM_DEVICE_MACVLAN_PARENT);
-	if (g_strcmp0 (priv->props.mode, props.mode) != 0)
+	if (priv->props.mode != props.mode) {
+		switch (props.mode) {
+		case MACVLAN_MODE_VEPA:
+			priv->mode = "vepa";
+			break;
+		case MACVLAN_MODE_BRIDGE:
+			priv->mode = "bridge";
+			break;
+		case MACVLAN_MODE_PRIVATE:
+			priv->mode = "private";
+			break;
+		case MACVLAN_MODE_PASSTHRU:
+			priv->mode = "passthru";
+			break;
+		default:
+			priv->mode = NULL;
+			_LOGD (LOGD_DEVICE, "unknown MAC-VLAN mode %d", props.mode);
+			break;
+		}
 		g_object_notify (object, NM_DEVICE_MACVLAN_MODE);
+	}
 	if (priv->props.no_promisc != props.no_promisc)
 		g_object_notify (object, NM_DEVICE_MACVLAN_NO_PROMISC);
 
@@ -120,7 +140,7 @@ get_property (GObject *object, guint prop_id,
 		nm_utils_g_value_set_object_path (value, parent);
 		break;
 	case PROP_MODE:
-		g_value_set_string (value, priv->props.mode);
+		g_value_set_string (value, priv->mode);
 		break;
 	case PROP_NO_PROMISC:
 		g_value_set_boolean (value, priv->props.no_promisc);

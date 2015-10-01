@@ -3618,22 +3618,7 @@ macvlan_info_data_parser (struct nlattr *info_data, gpointer parser_data)
 	if (err < 0)
 		return err;
 
-	switch (nla_get_u32 (tb[IFLA_MACVLAN_MODE])) {
-	case MACVLAN_MODE_PRIVATE:
-		props->mode = "private";
-		break;
-	case MACVLAN_MODE_VEPA:
-		props->mode = "vepa";
-		break;
-	case MACVLAN_MODE_BRIDGE:
-		props->mode = "bridge";
-		break;
-	case MACVLAN_MODE_PASSTHRU:
-		props->mode = "passthru";
-		break;
-	default:
-		return -NLE_PARSE_ERR;
-	}
+	props->mode = nla_get_u32 (tb[IFLA_MACVLAN_MODE]);
 
 #ifdef MACVLAN_FLAG_NOPROMISC
 	props->no_promisc = !!(nla_get_u16 (tb[IFLA_MACVLAN_FLAGS]) & MACVLAN_FLAG_NOPROMISC);
