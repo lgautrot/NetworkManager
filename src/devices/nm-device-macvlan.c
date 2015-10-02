@@ -34,6 +34,8 @@
 #include "nm-setting-wired.h"
 #include "nm-active-connection.h"
 #include "nm-ip4-config.h"
+#include "nm-config.h"
+#include "nm-core-internal.h"
 #include "nm-utils.h"
 
 #include "nmdbus-device-macvlan.h"
@@ -228,6 +230,32 @@ realize (NMDevice *device, NMPlatformLink *plink, GError **error)
 	return TRUE;
 }
 
+static NMSettingMacvlanMode
+get_setting_macvlan_mode (NMDevice *device, NMSettingMacvlan *s_macvlan)
+{
+	NMSettingMacvlanMode mode;
+	gs_free char *value = NULL;
+
+	mode = nm_setting_macvlan_get_mode (s_macvlan);
+	if (   mode > NM_SETTING_MACVLAN_MODE_DEFAULT
+	    && mode <= NM_SETTING_MACVLAN_MODE_LAST)
+		return mode;
+
+	value = nm_config_data_get_connection_default (NM_CONFIG_GET_DATA,
+	                                               "macvlan.mode",
+	                                               device);
+	if (value) {
+		mode = _nm_utils_ascii_str_to_int64 (value, 10,
+		                                     NM_SETTING_MACVLAN_MODE_DEFAULT,
+		                                     NM_SETTING_MACVLAN_MODE_LAST,
+		                                     NM_SETTING_MACVLAN_MODE_DEFAULT);
+		if (mode != NM_SETTING_MACVLAN_MODE_DEFAULT)
+			return mode;
+	}
+
+	return NM_SETTING_MACVLAN_MODE_VEPA;
+}
+
 static gboolean
 create_and_realize (NMDevice *device,
                     NMConnection *connection,
@@ -248,7 +276,7 @@ create_and_realize (NMDevice *device,
 	parent_ifindex = nm_device_get_ifindex (parent);
 	g_warn_if_fail (parent_ifindex > 0);
 
-	mode = setting_mode_to_platform (nm_setting_macvlan_get_mode (s_macvlan));
+	mode = setting_mode_to_platform (get_setting_macvlan_mode (device, s_macvlan));
 
 	plerr = nm_platform_macvlan_add (NM_PLATFORM_GET, iface, parent_ifindex, mode, out_plink);
 	if (plerr != NM_PLATFORM_ERROR_SUCCESS && plerr != NM_PLATFORM_ERROR_EXISTS) {
@@ -399,7 +427,7 @@ check_connection_compatible (NMDevice *device, NMConnection *connection)
 	if (!s_macvlan)
 		return FALSE;
 
-	if (setting_mode_to_platform (nm_setting_macvlan_get_mode (s_macvlan)) != priv->props.mode)
+	if (setting_mode_to_platform (get_setting_macvlan_mode (device, s_macvlan)) != priv->props.mode)
 		return FALSE;
 
 	/* Check parent interface; could be an interface name or a UUID */

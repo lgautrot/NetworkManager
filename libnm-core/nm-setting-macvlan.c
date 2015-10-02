@@ -98,7 +98,7 @@ nm_setting_macvlan_get_parent (NMSettingMacvlan *setting)
 NMSettingMacvlanMode
 nm_setting_macvlan_get_mode (NMSettingMacvlan *setting)
 {
-	g_return_val_if_fail (NM_IS_SETTING_MACVLAN (setting), NM_SETTING_MACVLAN_MODE_VEPA);
+	g_return_val_if_fail (NM_IS_SETTING_MACVLAN (setting), NM_SETTING_MACVLAN_MODE_DEFAULT);
 	return NM_SETTING_MACVLAN_GET_PRIVATE (setting)->mode;
 }
 
