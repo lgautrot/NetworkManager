@@ -41,6 +41,7 @@ G_BEGIN_DECLS
 
 #define NM_SETTING_MACVLAN_PARENT               "parent"
 #define NM_SETTING_MACVLAN_MODE                 "mode"
+#define NM_SETTING_MACVLAN_IS_MACVTAP           "is-macvtap"
 
 struct _NMSettingMacvlan {
 	NMSetting parent;
@@ -75,6 +76,8 @@ NM_AVAILABLE_IN_1_2
 const char *nm_setting_macvlan_get_parent         (NMSettingMacvlan *setting);
 NM_AVAILABLE_IN_1_2
 NMSettingMacvlanMode nm_setting_macvlan_get_mode  (NMSettingMacvlan *setting);
+NM_AVAILABLE_IN_1_2
+gboolean nm_setting_macvlan_get_is_macvtap        (NMSettingMacvlan *setting);
 
 G_END_DECLS
 

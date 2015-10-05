@@ -882,6 +882,7 @@ global:
 	nm_setting_ip_config_remove_dns_option;
 	nm_setting_ip_config_remove_dns_option_by_value;
 	nm_setting_vpn_get_timeout;
+	nm_setting_macvlan_get_is_macvtap;
 	nm_setting_macvlan_get_mode;
 	nm_setting_macvlan_get_parent;
 	nm_setting_macvlan_get_type;

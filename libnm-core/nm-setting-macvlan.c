@@ -48,12 +48,14 @@ NM_SETTING_REGISTER_TYPE (NM_TYPE_SETTING_MACVLAN)
 typedef struct {
 	char *parent;
 	NMSettingMacvlanMode mode;
+	gboolean is_macvtap;
 } NMSettingMacvlanPrivate;
 
 enum {
 	PROP_0,
 	PROP_PARENT,
 	PROP_MODE,
+	PROP_IS_MACVTAP,
 	LAST_PROP
 };
 
@@ -100,6 +102,21 @@ nm_setting_macvlan_get_mode (NMSettingMacvlan *setting)
 {
 	g_return_val_if_fail (NM_IS_SETTING_MACVLAN (setting), NM_SETTING_MACVLAN_MODE_DEFAULT);
 	return NM_SETTING_MACVLAN_GET_PRIVATE (setting)->mode;
+}
+
+/**
+ * nm_setting_macvlan_get_is_macvtap:
+ * @setting: the #NMSettingMacvlan
+ *
+ * Returns: the #NMSettingMacvlan:is_macvtap property of the setting
+ *
+ * Since: 1.2
+ **/
+gboolean
+nm_setting_macvlan_get_is_macvtap (NMSettingMacvlan *setting)
+{
+	g_return_val_if_fail (NM_IS_SETTING_MACVLAN (setting), FALSE);
+	return NM_SETTING_MACVLAN_GET_PRIVATE (setting)->is_macvtap;
 }
 
 /*********************************************************************/
@@ -190,6 +207,9 @@ set_property (GObject *object, guint prop_id,
 	case PROP_MODE:
 		priv->mode = g_value_get_uint (value);
 		break;
+	case PROP_IS_MACVTAP:
+		priv->is_macvtap = g_value_get_boolean (value);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -209,6 +229,9 @@ get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_MODE:
 		g_value_set_uint (value, priv->mode);
+		break;
+	case PROP_IS_MACVTAP:
+		g_value_set_boolean (value, priv->is_macvtap);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -284,4 +307,19 @@ nm_setting_macvlan_class_init (NMSettingMacvlanClass *setting_class)
 		                    G_PARAM_CONSTRUCT |
 		                    NM_SETTING_PARAM_INFERRABLE |
 		                    G_PARAM_STATIC_STRINGS));
+	/**
+	 * NMSettingMacvlan:is_macvtap:
+	 *
+	 * If %TRUE the device will be a macvtap, otherwise a macvlan.
+	 *
+	 * Since: 1.2
+	 **/
+	g_object_class_install_property
+		(object_class, PROP_IS_MACVTAP,
+		 g_param_spec_boolean (NM_SETTING_MACVLAN_IS_MACVTAP, "", "",
+		                       FALSE,
+		                       G_PARAM_READWRITE |
+		                       G_PARAM_CONSTRUCT |
+		                       NM_SETTING_PARAM_INFERRABLE |
+		                       G_PARAM_STATIC_STRINGS));
 }
