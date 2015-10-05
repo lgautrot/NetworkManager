@@ -51,10 +51,14 @@ typedef struct {
 	gpointer padding[4];
 } NMDeviceMacvlanClass;
 
+NM_AVAILABLE_IN_1_2
 GType nm_device_macvlan_get_type (void);
 
+NM_AVAILABLE_IN_1_2
 NMDevice *   nm_device_macvlan_get_parent      (NMDeviceMacvlan *device);
+NM_AVAILABLE_IN_1_2
 const char * nm_device_macvlan_get_mode        (NMDeviceMacvlan *device);
+NM_AVAILABLE_IN_1_2
 const char * nm_device_macvlan_get_hw_address  (NMDeviceMacvlan *device);
 
 G_END_DECLS

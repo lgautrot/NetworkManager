@@ -56,6 +56,8 @@ enum {
  * @device: a #NMDeviceMacvlan
  *
  * Returns: (transfer none): the device's parent device
+ *
+ * Since: 1.2
  **/
 NMDevice *
 nm_device_macvlan_get_parent (NMDeviceMacvlan *device)
@@ -72,6 +74,8 @@ nm_device_macvlan_get_parent (NMDeviceMacvlan *device)
  * Gets the MAC-VLAN mode of the device.
  *
  * Returns: the MAC-VLAN mode.
+ *
+ * Since: 1.2
  **/
 const char *
 nm_device_macvlan_get_mode (NMDeviceMacvlan *device)
@@ -89,6 +93,8 @@ nm_device_macvlan_get_mode (NMDeviceMacvlan *device)
  *
  * Returns: the hardware address. This is the internal string used by the
  * device, and must not be modified.
+ *
+ * Since: 1.2
  **/
 const char *
 nm_device_macvlan_get_hw_address (NMDeviceMacvlan *device)
@@ -230,6 +236,8 @@ nm_device_macvlan_class_init (NMDeviceMacvlanClass *gre_class)
 	 * NMDeviceMacvlan:parent:
 	 *
 	 * The devices's parent device.
+	 *
+	 * Since: 1.2
 	 **/
 	g_object_class_install_property
 	    (object_class, PROP_PARENT,
@@ -242,6 +250,8 @@ nm_device_macvlan_class_init (NMDeviceMacvlanClass *gre_class)
 	 * NMDeviceMacvlan:mode:
 	 *
 	 * The MAC-VLAN mode.
+	 *
+	 * Since: 1.2
 	 **/
 	g_object_class_install_property
 		(object_class, PROP_MODE,
@@ -254,6 +264,8 @@ nm_device_macvlan_class_init (NMDeviceMacvlanClass *gre_class)
 	 * NMDeviceMacvlan:hw-address:
 	 *
 	 * The hardware (MAC) address of the device.
+	 *
+	 * Since: 1.2
 	 **/
 	g_object_class_install_property
 		(object_class, PROP_HW_ADDRESS,
