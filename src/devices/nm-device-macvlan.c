@@ -256,6 +256,14 @@ get_setting_macvlan_mode (NMDevice *device, NMSettingMacvlan *s_macvlan)
 	return NM_SETTING_MACVLAN_MODE_VEPA;
 }
 
+static void
+setup (NMDevice *device, NMPlatformLink *plink)
+{
+	NM_DEVICE_CLASS (nm_device_macvlan_parent_class)->setup (device, plink);
+	update_properties (device);
+}
+
+
 static gboolean
 create_and_realize (NMDevice *device,
                     NMConnection *connection,
@@ -638,6 +646,7 @@ nm_device_macvlan_class_init (NMDeviceMacvlanClass *klass)
 	device_class->connection_type = NM_SETTING_MACVLAN_SETTING_NAME;
 	device_class->create_and_realize = create_and_realize;
 	device_class->realize = realize;
+	device_class->setup = setup;
 	device_class->get_generic_capabilities = get_generic_capabilities;
 	device_class->bring_up = bring_up;
 	device_class->act_stage1_prepare = act_stage1_prepare;
