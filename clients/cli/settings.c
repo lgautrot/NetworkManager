@@ -687,11 +687,13 @@ NmcOutputField nmc_fields_setting_macvlan[] = {
 	SETTING_FIELD ("name"),                                 /* 0 */
 	SETTING_FIELD (NM_SETTING_MACVLAN_PARENT),              /* 1 */
 	SETTING_FIELD (NM_SETTING_MACVLAN_MODE),                /* 2 */
+	SETTING_FIELD (NM_SETTING_MACVLAN_IS_MACVTAP),          /* 3 */
 	{NULL, NULL, 0, NULL, FALSE, FALSE, 0}
 };
 #define NMC_FIELDS_SETTING_MACVLAN_ALL     "name"","\
                                            NM_SETTING_MACVLAN_PARENT","\
-                                           NM_SETTING_MACVLAN_MODE
+                                           NM_SETTING_MACVLAN_MODE"," \
+                                           NM_SETTING_MACVLAN_IS_MACVTAP
 #define NMC_FIELDS_SETTING_MACVLAN_COMMON  NMC_FIELDS_SETTING_MACVLAN_ALL
 
 /*----------------------------------------------------------------------------*/
@@ -1732,6 +1734,7 @@ nmc_property_wifi_sec_get_wep_key_type (NMSetting *setting, NmcPropertyGetType g
 
 /* --- NM_SETTING_MACVLAN_SETTING_NAME property get functions --- */
 DEFINE_GETTER (nmc_property_macvlan_get_parent, NM_SETTING_MACVLAN_PARENT)
+DEFINE_GETTER (nmc_property_macvlan_get_is_macvtap, NM_SETTING_MACVLAN_IS_MACVTAP)
 
 static char *
 nmc_property_macvlan_get_mode (NMSetting *setting, NmcPropertyGetType get_type)
@@ -6775,6 +6778,13 @@ nmc_properties_init (void)
 	                    NULL,
 	                    NULL,
 	                    NULL);
+	nmc_add_prop_funcs (GLUE (MACVLAN, IS_MACVTAP),
+	                    nmc_property_macvlan_get_is_macvtap,
+	                    nmc_property_set_bool,
+	                    NULL,
+	                    NULL,
+	                    NULL,
+	                    NULL);
 }
 
 void
@@ -7936,6 +7946,7 @@ setting_macvlan_details (NMSetting *setting, NmCli *nmc,  const char *one_prop, 
 	set_val_str (arr, 0, g_strdup (nm_setting_get_name (setting)));
 	set_val_str (arr, 1, nmc_property_macvlan_get_parent (setting, NMC_PROPERTY_GET_PRETTY));
 	set_val_str (arr, 2, nmc_property_macvlan_get_mode (setting, NMC_PROPERTY_GET_PRETTY));
+	set_val_str (arr, 3, nmc_property_macvlan_get_is_macvtap (setting, NMC_PROPERTY_GET_PRETTY));
 	g_ptr_array_add (nmc->output_data, arr);
 
 	print_data (nmc);  /* Print all data */
