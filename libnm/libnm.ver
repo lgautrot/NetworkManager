@@ -863,6 +863,7 @@ global:
 	nm_device_get_nm_plugin_missing;
 	nm_device_set_managed;
 	nm_device_macvlan_get_hw_address;
+	nm_device_macvlan_get_is_macvtap;
 	nm_device_macvlan_get_mode;
 	nm_device_macvlan_get_parent;
 	nm_device_macvlan_get_type;

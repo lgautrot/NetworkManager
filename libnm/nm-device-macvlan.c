@@ -40,6 +40,7 @@ typedef struct {
 	NMDevice *parent;
 	char *mode;
 	char *hw_address;
+	gboolean is_macvtap;
 } NMDeviceMacvlanPrivate;
 
 enum {
@@ -47,6 +48,7 @@ enum {
 	PROP_PARENT,
 	PROP_MODE,
 	PROP_HW_ADDRESS,
+	PROP_IS_MACVTAP,
 
 	LAST_PROP
 };
@@ -102,6 +104,25 @@ nm_device_macvlan_get_hw_address (NMDeviceMacvlan *device)
 	g_return_val_if_fail (NM_IS_DEVICE_MACVLAN (device), NULL);
 
 	return NM_DEVICE_MACVLAN_GET_PRIVATE (device)->hw_address;
+}
+
+/**
+ * nm_device_macvlan_get_is_macvtap:
+ * @device: a #NMDeviceMacvlan
+ *
+ * Whether the #NMDeviceMacvlan is a MACVTAP.
+ *
+ * Returns: %TRUE is the device is a MACVTAP, %FALSE if it is
+ * a MACVLAN.
+ *
+ * Since: 1.2
+ **/
+gboolean
+nm_device_macvlan_get_is_macvtap (NMDeviceMacvlan *device)
+{
+	g_return_val_if_fail (NM_IS_DEVICE_MACVLAN (device), FALSE);
+
+	return NM_DEVICE_MACVLAN_GET_PRIVATE (device)->is_macvtap;
 }
 
 static gboolean
@@ -163,6 +184,7 @@ init_dbus (NMObject *object)
 		{ NM_DEVICE_MACVLAN_PARENT,      &priv->parent, NULL, NM_TYPE_DEVICE },
 		{ NM_DEVICE_MACVLAN_MODE,        &priv->mode },
 		{ NM_DEVICE_MACVLAN_HW_ADDRESS,  &priv->hw_address },
+		{ NM_DEVICE_MACVLAN_IS_MACVTAP,  &priv->is_macvtap },
 		{ NULL },
 	};
 
@@ -202,6 +224,9 @@ get_property (GObject *object,
 		break;
 	case PROP_HW_ADDRESS:
 		g_value_set_string (value, nm_device_macvlan_get_hw_address (device));
+		break;
+	case PROP_IS_MACVTAP:
+		g_value_set_boolean (value, nm_device_macvlan_get_is_macvtap (device));
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -273,4 +298,18 @@ nm_device_macvlan_class_init (NMDeviceMacvlanClass *gre_class)
 		                      NULL,
 		                      G_PARAM_READABLE |
 		                      G_PARAM_STATIC_STRINGS));
+
+	/**
+	 * NMDeviceMacvlan:is-macvtap:
+	 *
+	 * Whether the device is a MACVTAP.
+	 *
+	 * Since: 1.2
+	 **/
+	g_object_class_install_property
+		(object_class, PROP_HW_ADDRESS,
+		 g_param_spec_boolean (NM_DEVICE_MACVLAN_IS_MACVTAP, "", "",
+		                       FALSE,
+		                       G_PARAM_READABLE |
+		                       G_PARAM_STATIC_STRINGS));
 }

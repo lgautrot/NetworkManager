@@ -39,6 +39,7 @@ G_BEGIN_DECLS
 #define NM_DEVICE_MACVLAN_PARENT      "parent"
 #define NM_DEVICE_MACVLAN_MODE        "mode"
 #define NM_DEVICE_MACVLAN_HW_ADDRESS  "hw-address"
+#define NM_DEVICE_MACVLAN_IS_MACVTAP  "is-macvtap"
 
 struct _NMDeviceMacvlan {
 	NMDevice parent;
@@ -60,6 +61,8 @@ NM_AVAILABLE_IN_1_2
 const char * nm_device_macvlan_get_mode        (NMDeviceMacvlan *device);
 NM_AVAILABLE_IN_1_2
 const char * nm_device_macvlan_get_hw_address  (NMDeviceMacvlan *device);
+NM_AVAILABLE_IN_1_2
+gboolean     nm_device_macvlan_get_is_macvtap  (NMDeviceMacvlan *device);
 
 G_END_DECLS
 
