@@ -348,6 +348,7 @@ typedef struct {
 	int parent_ifindex;
 	int mode;
 	gboolean no_promisc;
+	gboolean is_macvtap;
 } NMPlatformMacvlanProperties;
 
 typedef struct {
@@ -491,6 +492,7 @@ typedef struct {
 	                                      const char **mode);
 
 	gboolean (*macvlan_add) (NMPlatform *platform, const char *name, int parent, int mode, NMPlatformLink *out_link);
+	gboolean (*macvtap_add) (NMPlatform *platform, const char *name, int parent, int mode, NMPlatformLink *out_link);
 
 	gboolean (*veth_get_properties) (NMPlatform *, int ifindex, NMPlatformVethProperties *properties);
 	gboolean (*tun_get_properties) (NMPlatform *, int ifindex, NMPlatformTunProperties *properties);
@@ -676,6 +678,7 @@ gboolean nm_platform_vlan_set_ingress_map (NMPlatform *self, int ifindex, int fr
 gboolean nm_platform_vlan_set_egress_map (NMPlatform *self, int ifindex, int from, int to);
 
 NMPlatformError nm_platform_macvlan_add (NMPlatform *self, const char *name, int parent, int mode, NMPlatformLink *out_link);
+NMPlatformError nm_platform_macvtap_add (NMPlatform *self, const char *name, int parent, int mode, NMPlatformLink *out_link);
 
 NMPlatformError nm_platform_infiniband_partition_add (NMPlatform *self, int parent, int p_key, NMPlatformLink *out_link);
 gboolean nm_platform_infiniband_get_info (NMPlatform *self, int ifindex, int *parent, int *p_key, const char **mode);

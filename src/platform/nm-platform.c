@@ -1501,6 +1501,37 @@ nm_platform_macvlan_add (NMPlatform *self, const char *name, int parent, int mod
 	return NM_PLATFORM_ERROR_SUCCESS;
 }
 
+/**
+ * nm_platform_macvtap_add:
+ * @self: platform instance
+ * @name: new interface name
+ * @parent: the parent interface
+ * @mode: a MAC-VLAN mode as MACVLAN_MODE_VEPA, MACVLAN_MODE_BRIDGE, etc.
+ * @out_link: on success, the link object
+ *
+ * Create a macvtap interface.
+ */
+NMPlatformError
+nm_platform_macvtap_add (NMPlatform *self, const char *name, int parent, int mode,
+                         NMPlatformLink *out_link)
+{
+	NMPlatformError plerr;
+
+	_CHECK_SELF (self, klass, NM_PLATFORM_ERROR_BUG);
+
+	g_return_val_if_fail (name, NM_PLATFORM_ERROR_BUG);
+	g_return_val_if_fail (klass->macvtap_add, NM_PLATFORM_ERROR_BUG);
+
+	plerr = _link_add_check_existing (self, name, NM_LINK_TYPE_MACVTAP, out_link);
+	if (plerr != NM_PLATFORM_ERROR_SUCCESS)
+		return plerr;
+
+	_LOGD ("link: adding macvtap '%s', parent %d mode %d", name, parent, mode);
+	if (!klass->macvtap_add (self, name, parent, mode, out_link))
+		return NM_PLATFORM_ERROR_UNSPECIFIED;
+	return NM_PLATFORM_ERROR_SUCCESS;
+}
+
 gboolean
 nm_platform_master_set_option (NMPlatform *self, int ifindex, const char *option, const char *value)
 {

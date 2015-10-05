@@ -53,6 +53,9 @@
 #if HAVE_LIBNL_MACVLAN
 #include <netlink/route/link/macvlan.h>
 #endif
+#if HAVE_LIBNL_MACVTAP
+#include <netlink/route/link/macvtap.h>
+#endif
 
 #include "nm-core-internal.h"
 #include "NetworkManagerUtils.h"
@@ -3289,6 +3292,26 @@ macvlan_add (NMPlatform *platform, const char *name, int parent, int mode, NMPla
 #endif
 }
 
+static int
+macvtap_add (NMPlatform *platform, const char *name, int parent, int mode, NMPlatformLink *out_link)
+{
+#if HAVE_LIBNL_MACVTAP
+	auto_nl_object struct rtnl_link *rtnllink;
+
+	rtnllink = (struct rtnl_link *) build_rtnl_link (0, name, NM_LINK_TYPE_MACVTAP);
+	rtnl_link_macvtap_set_mode (rtnllink, mode);
+	rtnl_link_set_link (rtnllink, parent);
+
+	_LOGD ("link: add macvtap '%s', parent %d, mode %d", name, parent, mode);
+
+	return do_add_link_with_lookup (platform, name, rtnllink, NM_LINK_TYPE_MACVTAP, out_link);
+#else
+	_LOGW ("link: add macvtap '%s', parent %d, mode %d: macvtap support disabled", name, parent, mode);
+	return FALSE;
+#endif
+}
+
+
 static gboolean
 link_enslave (NMPlatform *platform, int master, int slave)
 {
@@ -3670,7 +3693,9 @@ macvlan_get_properties (NMPlatform *platform, int ifindex, NMPlatformMacvlanProp
 	if (err != 0) {
 		_LOGW ("(%s) could not read properties: %s",
 		       obj->link.name, nl_geterror (err));
-	}
+	} else
+		props->is_macvtap = obj->link.type == NM_LINK_TYPE_MACVTAP;
+
 	return (err == 0);
 }
 
@@ -5107,6 +5132,7 @@ nm_linux_platform_class_init (NMLinuxPlatformClass *klass)
 	platform_class->vlan_set_egress_map = vlan_set_egress_map;
 
 	platform_class->macvlan_add = macvlan_add;
+	platform_class->macvtap_add = macvtap_add;
 
 	platform_class->infiniband_partition_add = infiniband_partition_add;
 	platform_class->infiniband_get_info = infiniband_get_info;
