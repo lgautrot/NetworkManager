@@ -59,6 +59,7 @@ enum {
 	PROP_PARENT,
 	PROP_MODE,
 	PROP_NO_PROMISC,
+	PROP_IS_MACVTAP,
 
 	LAST_PROP
 };
@@ -190,6 +191,8 @@ update_properties (NMDevice *device)
 	}
 	if (priv->props.no_promisc != props.no_promisc)
 		g_object_notify (object, NM_DEVICE_MACVLAN_NO_PROMISC);
+	if (priv->props.is_macvtap != props.is_macvtap)
+		g_object_notify (object, NM_DEVICE_MACVLAN_IS_MACVTAP);
 
 	memcpy (&priv->props, &props, sizeof (NMPlatformMacvlanProperties));
 
@@ -275,6 +278,7 @@ create_and_realize (NMDevice *device,
 	NMPlatformError plerr;
 	NMSettingMacvlan *s_macvlan;
 	int parent_ifindex;
+	gboolean is_macvtap;
 	int mode;
 
 	s_macvlan = nm_connection_get_setting_macvlan (connection);
@@ -285,11 +289,17 @@ create_and_realize (NMDevice *device,
 	g_warn_if_fail (parent_ifindex > 0);
 
 	mode = setting_mode_to_platform (get_setting_macvlan_mode (device, s_macvlan));
+	is_macvtap = nm_setting_macvlan_get_is_macvtap (s_macvlan);
 
-	plerr = nm_platform_macvlan_add (NM_PLATFORM_GET, iface, parent_ifindex, mode, out_plink);
+	if (is_macvtap)
+		plerr = nm_platform_macvtap_add (NM_PLATFORM_GET, iface, parent_ifindex, mode, out_plink);
+	else
+		plerr = nm_platform_macvlan_add (NM_PLATFORM_GET, iface, parent_ifindex, mode, out_plink);
+
 	if (plerr != NM_PLATFORM_ERROR_SUCCESS && plerr != NM_PLATFORM_ERROR_EXISTS) {
 		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
-		             "Failed to create MAC-VLAN interface '%s' for '%s': %s",
+		             "Failed to create %s interface '%s' for '%s': %s",
+		             is_macvtap ? "macvtap" : "macvlan",
 		             iface,
 		             nm_connection_get_id (connection),
 		             nm_platform_error_to_string (plerr));
@@ -438,6 +448,9 @@ check_connection_compatible (NMDevice *device, NMConnection *connection)
 	if (setting_mode_to_platform (get_setting_macvlan_mode (device, s_macvlan)) != priv->props.mode)
 		return FALSE;
 
+	if (nm_setting_macvlan_get_is_macvtap (s_macvlan) != priv->props.is_macvtap)
+		return FALSE;
+
 	/* Check parent interface; could be an interface name or a UUID */
 	parent = nm_setting_macvlan_get_parent (s_macvlan);
 	if (parent) {
@@ -515,6 +528,9 @@ update_connection (NMDevice *device, NMConnection *connection)
 	new_mode = platform_mode_to_setting (priv->props.mode);
 	if (new_mode != -1 && new_mode != nm_setting_macvlan_get_mode (s_macvlan))
 		g_object_set (s_macvlan, NM_SETTING_MACVLAN_MODE, new_mode, NULL);
+
+	if (priv->props.is_macvtap != nm_setting_macvlan_get_is_macvtap (s_macvlan))
+		g_object_set (s_macvlan, NM_SETTING_MACVLAN_IS_MACVTAP, priv->props.is_macvtap, NULL);
 
 	if (priv->props.parent_ifindex != NM_PLATFORM_LINK_OTHER_NETNS)
 		parent = nm_manager_get_device_by_ifindex (nm_manager_get (), priv->props.parent_ifindex);
@@ -626,6 +642,9 @@ get_property (GObject *object, guint prop_id,
 	case PROP_NO_PROMISC:
 		g_value_set_boolean (value, priv->props.no_promisc);
 		break;
+	case PROP_IS_MACVTAP:
+		g_value_set_boolean (value, priv->props.is_macvtap);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 		break;
@@ -678,6 +697,13 @@ nm_device_macvlan_class_init (NMDeviceMacvlanClass *klass)
 	g_object_class_install_property
 		(object_class, PROP_NO_PROMISC,
 		 g_param_spec_boolean (NM_DEVICE_MACVLAN_NO_PROMISC, "", "",
+		                       FALSE,
+		                       G_PARAM_READABLE |
+		                       G_PARAM_STATIC_STRINGS));
+
+	g_object_class_install_property
+		(object_class, PROP_IS_MACVTAP,
+		 g_param_spec_boolean (NM_DEVICE_MACVLAN_IS_MACVTAP, "", "",
 		                       FALSE,
 		                       G_PARAM_READABLE |
 		                       G_PARAM_STATIC_STRINGS));

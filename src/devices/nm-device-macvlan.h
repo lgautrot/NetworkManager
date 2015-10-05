@@ -35,6 +35,7 @@ G_BEGIN_DECLS
 #define NM_DEVICE_MACVLAN_PARENT     "parent"
 #define NM_DEVICE_MACVLAN_MODE       "mode"
 #define NM_DEVICE_MACVLAN_NO_PROMISC "no-promisc"
+#define NM_DEVICE_MACVLAN_IS_MACVTAP "is-macvtap"
 
 typedef NMDevice NMDeviceMacvlan;
 typedef NMDeviceClass NMDeviceMacvlanClass;
