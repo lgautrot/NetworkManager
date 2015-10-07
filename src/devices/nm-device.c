@@ -60,6 +60,7 @@
 #include "nm-core-internal.h"
 #include "nm-default-route-manager.h"
 #include "nm-route-manager.h"
+#include "nm-lldp-listener.h"
 #include "sd-ipv4ll.h"
 #include "nm-audit-manager.h"
 
@@ -126,6 +127,7 @@ enum {
 	PROP_HW_ADDRESS,
 	PROP_HAS_PENDING_ACTION,
 	PROP_METERED,
+	PROP_LLDP_NEIGHBORS,
 	LAST_PROP
 };
 
@@ -345,6 +347,7 @@ typedef struct {
 	NMMetered       metered;
 
 	NMConnectionProvider *con_provider;
+	NMLldpListener *lldp_listener;
 } NMDevicePrivate;
 
 static gboolean nm_device_set_ip4_config (NMDevice *self,
@@ -1172,6 +1175,7 @@ static void
 update_dynamic_ip_setup (NMDevice *self)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	GError *error;
 
 	g_hash_table_remove_all (priv->ip6_saved_properties);
 
@@ -1196,6 +1200,16 @@ update_dynamic_ip_setup (NMDevice *self)
 	}
 	if (priv->dnsmasq_manager) {
 		/* FIXME: todo */
+	}
+
+	if (priv->lldp_listener && nm_lldp_listener_is_running (priv->lldp_listener)) {
+		nm_lldp_listener_stop (priv->lldp_listener);
+		if (!nm_lldp_listener_start (priv->lldp_listener, nm_device_get_ifindex (self),
+		                             nm_device_get_iface (self), &error)) {
+			_LOGD (LOGD_DEVICE, "LLDP listener %p could not be restarted: %s",
+			       priv->lldp_listener, error->message);
+			g_clear_error (&error);
+		}
 	}
 }
 
@@ -2891,6 +2905,44 @@ master_ready_cb (NMActiveConnection *active,
 	nm_device_activate_schedule_stage2_device_config (self);
 }
 
+static void
+lldp_neighbors_changed (NMLldpListener *lldp_listener, GParamSpec *pspec,
+                        gpointer user_data)
+{
+	NMDevice *self = NM_DEVICE (user_data);
+
+	g_object_notify (G_OBJECT (self), NM_DEVICE_LLDP_NEIGHBORS);
+}
+
+static gboolean
+lldp_rx_enabled (NMDevice *device, NMSettingConnection *s_con)
+{
+	NMSettingConnectionLldp lldp = NM_SETTING_CONNECTION_LLDP_DEFAULT;
+	gs_free char *value = NULL;
+
+	if (s_con) {
+		lldp = nm_setting_connection_get_lldp (s_con);
+		if (lldp != NM_SETTING_CONNECTION_LLDP_DEFAULT)
+			goto found;
+	}
+
+	value = nm_config_data_get_connection_default (NM_CONFIG_GET_DATA,
+	                                               "connection.lldp",
+	                                               device);
+	if (value) {
+		lldp = _nm_utils_ascii_str_to_int64 (value, 10,
+		                                    NM_SETTING_CONNECTION_LLDP_DEFAULT,
+		                                    NM_SETTING_CONNECTION_LLDP_ENABLE_RX,
+		                                    NM_SETTING_CONNECTION_LLDP_DEFAULT);
+		if (lldp != NM_SETTING_CONNECTION_LLDP_DEFAULT)
+			goto found;
+	}
+
+	lldp = NM_SETTING_CONNECTION_LLDP_DISABLE;
+found:
+	return lldp == NM_SETTING_CONNECTION_LLDP_ENABLE_RX;
+}
+
 static NMActStageReturn
 act_stage1_prepare (NMDevice *self, NMDeviceStateReason *reason)
 {
@@ -2987,7 +3039,10 @@ nm_device_activate_stage2_device_config (gpointer user_data)
 	NMDeviceStateReason reason = NM_DEVICE_STATE_REASON_NONE;
 	gboolean no_firmware = FALSE;
 	NMActiveConnection *active = NM_ACTIVE_CONNECTION (priv->act_request);
+	NMConnection *connection;
+	NMSettingConnection *s_con;
 	GSList *iter;
+	gs_free_error GError *error = NULL;
 
 	/* Clear the activation source ID now that this stage has run */
 	activation_source_clear (self, FALSE, 0);
@@ -3025,6 +3080,30 @@ nm_device_activate_stage2_device_config (gpointer user_data)
 		else if (   nm_device_uses_generated_assumed_connection (self)
 		         && slave_state <= NM_DEVICE_STATE_DISCONNECTED)
 			nm_device_queue_recheck_assume (info->slave);
+	}
+
+	connection = nm_device_get_applied_connection (self);
+	g_assert (connection);
+	s_con = nm_connection_get_setting_connection (connection);
+
+	if (lldp_rx_enabled (self, s_con)) {
+		if (priv->lldp_listener)
+			nm_lldp_listener_stop (priv->lldp_listener);
+		else {
+			priv->lldp_listener = nm_lldp_listener_new ();
+			g_signal_connect (priv->lldp_listener,
+			                  "notify::" NM_LLDP_LISTENER_NEIGHBORS,
+			                  G_CALLBACK (lldp_neighbors_changed),
+			                  self);
+		}
+
+		if (nm_lldp_listener_start (priv->lldp_listener, nm_device_get_ifindex (self),
+		                            nm_device_get_iface (self), &error))
+			_LOGD (LOGD_DEVICE, "LLDP listener %p started", priv->lldp_listener);
+		else {
+			_LOGD (LOGD_DEVICE, "LLDP listener %p could not be started: %s",
+			       priv->lldp_listener, error->message);
+		}
 	}
 
 	_LOGD (LOGD_DEVICE, "Activation: Stage 2 of 5 (Device Configure) successful.");
@@ -8519,6 +8598,9 @@ nm_device_cleanup (NMDevice *self, NMDeviceStateReason reason, CleanupType clean
 		nm_platform_address_flush (NM_PLATFORM_GET, ifindex);
 	}
 
+	if (priv->lldp_listener)
+		nm_lldp_listener_stop (priv->lldp_listener);
+
 	nm_device_update_metered (self);
 	_cleanup_generic_post (self, cleanup_type);
 }
@@ -9528,6 +9610,14 @@ dispose (GObject *object)
 	nm_clear_g_source (&priv->device_link_changed_id);
 	nm_clear_g_source (&priv->device_ip_link_changed_id);
 
+	if (priv->lldp_listener) {
+		g_signal_handlers_disconnect_by_func (priv->lldp_listener,
+		                                      G_CALLBACK (lldp_neighbors_changed),
+		                                      self);
+		nm_lldp_listener_stop (priv->lldp_listener);
+		g_clear_object (&priv->lldp_listener);
+	}
+
 	G_OBJECT_CLASS (nm_device_parent_class)->dispose (object);
 }
 
@@ -9679,6 +9769,8 @@ get_property (GObject *object, guint prop_id,
 	GPtrArray *array;
 	GHashTableIter iter;
 	NMConnection *connection;
+	GVariantBuilder array_builder;
+	GVariant *variant;
 
 	switch (prop_id) {
 	case PROP_UDI:
@@ -9785,6 +9877,16 @@ get_property (GObject *object, guint prop_id,
 		break;
 	case PROP_METERED:
 		g_value_set_uint (value, priv->metered);
+		break;
+	case PROP_LLDP_NEIGHBORS:
+		if (priv->lldp_listener) {
+			g_object_get (priv->lldp_listener, NM_LLDP_LISTENER_NEIGHBORS, &variant, NULL);
+			g_value_take_variant (value, variant);
+		}
+		else {
+			g_variant_builder_init (&array_builder, G_VARIANT_TYPE ("aa{sv}"));
+			g_value_take_variant (value, g_variant_builder_end (&array_builder));
+		}
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -10067,6 +10169,14 @@ nm_device_class_init (NMDeviceClass *klass)
 		                    0, G_MAXUINT32, NM_METERED_UNKNOWN,
 		                    G_PARAM_READABLE |
 		                    G_PARAM_STATIC_STRINGS));
+
+	g_object_class_install_property
+		(object_class, PROP_LLDP_NEIGHBORS,
+		 g_param_spec_variant (NM_DEVICE_LLDP_NEIGHBORS, "", "",
+		                       G_VARIANT_TYPE ("aa{sv}"),
+		                       NULL,
+		                       G_PARAM_READABLE |
+		                       G_PARAM_STATIC_STRINGS));
 
 	/* Signals */
 	signals[STATE_CHANGED] =
