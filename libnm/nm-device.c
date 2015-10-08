@@ -193,11 +193,8 @@ demarshal_lldp_neighbors (NMObject *object, GParamSpec *pspec, GVariant *value, 
 		neigh = nm_lldp_neighbor_new ();
 		g_variant_iter_init (&attrs_iter, variant);
 
-		while (g_variant_iter_next (&attrs_iter, "{&sv}", &attr_name, &attr_variant)) {
-			g_hash_table_insert (neigh->attrs, g_strdup (attr_name),
-			                     g_variant_ref_sink (attr_variant));
-			g_variant_unref (attr_variant);
-		}
+		while (g_variant_iter_next (&attrs_iter, "{&sv}", &attr_name, &attr_variant))
+			g_hash_table_insert (neigh->attrs, g_strdup (attr_name), attr_variant);
 
 		g_variant_unref (variant);
 		g_ptr_array_add (priv->lldp_neighbors, neigh);
