@@ -74,7 +74,6 @@ typedef struct {
 	NMPlatformLink link;
 
 	char *udi;
-	int vlan_id;
 	int ib_p_key;
 	struct in6_addr ip6_lladdr;
 } NMFakePlatformLink;
@@ -627,7 +626,7 @@ vlan_add (NMPlatform *platform, const char *name, int parent, int vlan_id, guint
 
 	g_return_val_if_fail (device, FALSE);
 
-	device->vlan_id = vlan_id;
+	device->link.vlan_id = vlan_id;
 	device->link.vlan_flags = vlan_flags;
 	device->link.parent = parent;
 
@@ -646,7 +645,7 @@ vlan_get_info (NMPlatform *platform, int ifindex, int *parent, int *vlan_id, gui
 	if (parent)
 		*parent = device->link.parent;
 	if (vlan_id)
-		*vlan_id = device->vlan_id;
+		*vlan_id = device->link.vlan_id;
 	if (flags)
 		*flags = device->link.vlan_flags;
 
