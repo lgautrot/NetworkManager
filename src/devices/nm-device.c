@@ -2984,31 +2984,32 @@ lldp_neighbors_changed (NMLldpListener *lldp_listener, GParamSpec *pspec,
 }
 
 static gboolean
-lldp_rx_enabled (NMDevice *device, NMSettingConnection *s_con)
+lldp_rx_enabled (NMDevice *self)
 {
+	NMConnection *connection;
+	NMSettingConnection *s_con;
 	NMSettingConnectionLldp lldp = NM_SETTING_CONNECTION_LLDP_DEFAULT;
-	gs_free char *value = NULL;
 
-	if (s_con) {
-		lldp = nm_setting_connection_get_lldp (s_con);
-		if (lldp != NM_SETTING_CONNECTION_LLDP_DEFAULT)
-			goto found;
-	}
+	connection = nm_device_get_applied_connection (self);
+	g_return_val_if_fail (connection, FALSE);
 
-	value = nm_config_data_get_connection_default (NM_CONFIG_GET_DATA,
-	                                               "connection.lldp",
-	                                               device);
-	if (value) {
+	s_con = nm_connection_get_setting_connection (connection);
+	g_return_val_if_fail (s_con, FALSE);
+
+	lldp = nm_setting_connection_get_lldp (s_con);
+	if (lldp == NM_SETTING_CONNECTION_LLDP_DEFAULT) {
+		gs_free char *value = NULL;
+
+		value = nm_config_data_get_connection_default (NM_CONFIG_GET_DATA,
+		                                               "connection.lldp",
+		                                               self);
 		lldp = _nm_utils_ascii_str_to_int64 (value, 10,
-		                                    NM_SETTING_CONNECTION_LLDP_DEFAULT,
-		                                    NM_SETTING_CONNECTION_LLDP_ENABLE_RX,
-		                                    NM_SETTING_CONNECTION_LLDP_DEFAULT);
-		if (lldp != NM_SETTING_CONNECTION_LLDP_DEFAULT)
-			goto found;
+		                                     NM_SETTING_CONNECTION_LLDP_DEFAULT,
+		                                     NM_SETTING_CONNECTION_LLDP_ENABLE_RX,
+		                                     NM_SETTING_CONNECTION_LLDP_DEFAULT);
+		if (lldp == NM_SETTING_CONNECTION_LLDP_DEFAULT)
+			lldp = NM_SETTING_CONNECTION_LLDP_DISABLE;
 	}
-
-	lldp = NM_SETTING_CONNECTION_LLDP_DISABLE;
-found:
 	return lldp == NM_SETTING_CONNECTION_LLDP_ENABLE_RX;
 }
 
@@ -3096,10 +3097,7 @@ activate_stage2_device_config (NMDevice *self)
 	NMDeviceStateReason reason = NM_DEVICE_STATE_REASON_NONE;
 	gboolean no_firmware = FALSE;
 	NMActiveConnection *active = NM_ACTIVE_CONNECTION (priv->act_request);
-	NMConnection *connection;
-	NMSettingConnection *s_con;
 	GSList *iter;
-	gs_free_error GError *error = NULL;
 
 	nm_device_state_changed (self, NM_DEVICE_STATE_CONFIG, NM_DEVICE_STATE_REASON_NONE);
 
@@ -3135,11 +3133,9 @@ activate_stage2_device_config (NMDevice *self)
 			nm_device_queue_recheck_assume (info->slave);
 	}
 
-	connection = nm_device_get_applied_connection (self);
-	g_assert (connection);
-	s_con = nm_connection_get_setting_connection (connection);
+	if (lldp_rx_enabled (self)) {
+		gs_free_error GError *error = NULL;
 
-	if (lldp_rx_enabled (self, s_con)) {
 		if (priv->lldp_listener)
 			nm_lldp_listener_stop (priv->lldp_listener);
 		else {
