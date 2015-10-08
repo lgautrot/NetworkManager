@@ -9796,7 +9796,6 @@ get_property (GObject *object, guint prop_id,
 	GHashTableIter iter;
 	NMConnection *connection;
 	GVariantBuilder array_builder;
-	GVariant *variant;
 
 	switch (prop_id) {
 	case PROP_UDI:
@@ -9905,10 +9904,8 @@ get_property (GObject *object, guint prop_id,
 		g_value_set_uint (value, priv->metered);
 		break;
 	case PROP_LLDP_NEIGHBORS:
-		if (priv->lldp_listener) {
-			g_object_get (priv->lldp_listener, NM_LLDP_LISTENER_NEIGHBORS, &variant, NULL);
-			g_value_take_variant (value, variant);
-		}
+		if (priv->lldp_listener)
+			g_value_set_variant (value, nm_lldp_listener_get_neighbors (priv->lldp_listener));
 		else {
 			g_variant_builder_init (&array_builder, G_VARIANT_TYPE ("aa{sv}"));
 			g_value_take_variant (value, g_variant_builder_end (&array_builder));

@@ -49,6 +49,8 @@ gboolean nm_lldp_listener_start (NMLldpListener *self, int ifindex, const char *
 void nm_lldp_listener_stop (NMLldpListener *self);
 gboolean nm_lldp_listener_is_running (NMLldpListener *self);
 
+GVariant *nm_lldp_listener_get_neighbors (NMLldpListener *self);
+
 G_END_DECLS
 
 #endif /* __NM_LLDP_LISTENER__ */

@@ -32,12 +32,13 @@
 #define MIN_UPDATE_INTERVAL   2
 
 typedef struct {
-	char          *iface;
+	char         *iface;
 	int           ifindex;
-	sd_lldp       *lldp_handle;
-	GHashTable    *lldp_neighbors;
+	sd_lldp      *lldp_handle;
+	GHashTable   *lldp_neighbors;
 	guint         timer;
 	guint         num_pending_events;
+	GVariant     *variant;
 } NMLldpListenerPrivate;
 
 enum {
@@ -356,6 +357,7 @@ next_packet:
 	} else {
 		g_hash_table_destroy (priv->lldp_neighbors);
 		priv->lldp_neighbors = hash;
+		nm_clear_g_variant (&priv->variant);
 		g_object_notify (G_OBJECT (self), NM_LLDP_LISTENER_NEIGHBORS);
 	}
 
@@ -471,8 +473,10 @@ nm_lldp_listener_stop (NMLldpListener *self)
 
 		size = g_hash_table_size (priv->lldp_neighbors);
 		g_hash_table_remove_all (priv->lldp_neighbors);
-		if (size)
+		if (size) {
+			nm_clear_g_variant (&priv->variant);
 			g_object_notify (G_OBJECT (self), NM_LLDP_LISTENER_NEIGHBORS);
+		}
 	}
 
 	nm_clear_g_source (&priv->timer);
@@ -489,8 +493,8 @@ nm_lldp_listener_is_running (NMLldpListener *self)
 	return !!priv->lldp_handle;
 }
 
-static void
-get_property_neighbors (NMLldpListener *self, GValue *value)
+GVariant *
+nm_lldp_listener_get_neighbors (NMLldpListener *self)
 {
 	GVariantBuilder array_builder, neigh_builder;
 	GHashTableIter iter;
@@ -499,6 +503,10 @@ get_property_neighbors (NMLldpListener *self, GValue *value)
 	char *dest_str = NULL;
 
 	priv = NM_LLDP_LISTENER_GET_PRIVATE (self);
+
+	if (priv->variant)
+		goto out;
+
 	g_variant_builder_init (&array_builder, G_VARIANT_TYPE ("aa{sv}"));
 	g_hash_table_iter_init (&iter, priv->lldp_neighbors);
 
@@ -557,7 +565,10 @@ get_property_neighbors (NMLldpListener *self, GValue *value)
 		g_variant_builder_add (&array_builder, "a{sv}", &neigh_builder);
 	}
 
-	g_value_take_variant (value, g_variant_builder_end (&array_builder));
+	priv->variant = g_variant_ref_sink (g_variant_builder_end (&array_builder));
+
+out:
+	return priv->variant;
 }
 
 static void
@@ -568,7 +579,7 @@ get_property (GObject *object, guint prop_id,
 
 	switch (prop_id) {
 	case PROP_NEIGHBORS:
-		get_property_neighbors (self, value);
+		g_value_set_variant (value, nm_lldp_listener_get_neighbors (self));
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -608,6 +619,8 @@ finalize (GObject *object)
 
 	nm_lldp_listener_stop (self);
 	g_hash_table_unref (priv->lldp_neighbors);
+
+	nm_clear_g_variant (&priv->variant);
 
 	G_OBJECT_CLASS (nm_lldp_listener_parent_class)->finalize (object);
 }
