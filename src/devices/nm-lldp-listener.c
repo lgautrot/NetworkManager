@@ -74,6 +74,28 @@ gvalue_destroy (gpointer data)
 	g_slice_free (GValue, value);
 }
 
+static GValue *
+gvalue_new_nstr (const char *str, guint16 len)
+{
+	GValue *value;
+
+	value = g_slice_new0 (GValue);
+	g_value_init (value, G_TYPE_STRING);
+	g_value_take_string (value, strndup (str, len));
+	return value;
+}
+
+static GValue *
+gvalue_new_uint (guint val)
+{
+	GValue *value;
+
+	value = g_slice_new0 (GValue);
+	g_value_init (value, G_TYPE_UINT);
+	g_value_set_uint (value, val);
+	return value;
+}
+
 static guint
 lldp_neighbor_id_hash (gconstpointer ptr)
 {
@@ -284,61 +306,43 @@ process_lldp_neighbors (NMLldpListener *self)
 		}
 
 		if (sd_lldp_packet_read_port_description (packets[i], &str, &len) == 0) {
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_STRING);
-			g_value_take_string (value, strndup (str, len));
+			value = gvalue_new_nstr (str, len);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_PORT_DESCRIPTION, value);
 		}
 
 		if (sd_lldp_packet_read_system_name (packets[i], &str, &len) == 0) {
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_STRING);
-			g_value_take_string (value, strndup (str, len));
+			value = gvalue_new_nstr (str, len);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_SYSTEM_NAME, value);
 		}
 
 		if (sd_lldp_packet_read_system_description (packets[i], &str, &len) == 0) {
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_STRING);
-			g_value_take_string (value, strndup (str, len));
+			value = gvalue_new_nstr (str, len);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_SYSTEM_DESCRIPTION, value);
 		}
 
 		if (sd_lldp_packet_read_system_capability (packets[i], &data16) == 0) {
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_UINT);
-			g_value_set_uint (value, data16);
+			value = gvalue_new_uint (data16);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_SYSTEM_CAPABILITIES, value);
 		}
 
 		if (sd_lldp_packet_read_port_vlan_id (packets[i], &data16) == 0) {
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_UINT);
-			g_value_set_uint (value, data16);
+			value = gvalue_new_uint (data16);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_IEEE_802_1_PVID, value);
 		}
 
 		if (sd_lldp_packet_read_port_protocol_vlan_id (packets[i], &data8, &data16) == 0) {
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_UINT);
-			g_value_set_uint (value, data16);
+			value = gvalue_new_uint (data16);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_IEEE_802_1_PPVID, value);
 
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_UINT);
-			g_value_set_uint (value, data8);
+			value = gvalue_new_uint (data8);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_IEEE_802_1_PPVID_FLAGS, value);
 		}
 
 		if (sd_lldp_packet_read_vlan_name (packets[i], &data16, &str, &len) == 0) {
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_UINT);
-			g_value_set_uint (value, data16);
+			value = gvalue_new_uint (data16);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_IEEE_802_1_VID, value);
 
-			value = g_slice_new0 (GValue);
-			g_value_init (value, G_TYPE_STRING);
-			g_value_take_string (value, strndup (str, len));
+			value = gvalue_new_nstr (str, len);
 			g_hash_table_insert (neigh->tlvs, NM_LLDP_ATTR_IEEE_802_1_VLAN_NAME, value);
 		}
 
