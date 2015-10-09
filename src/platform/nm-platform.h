@@ -87,9 +87,6 @@ typedef enum {
 
 #define NM_PLATFORM_LINK_OTHER_NETNS    (-1)
 
-/* Maximal number of VLAN egress priority mappings stored by NMPlatform */
-#define NM_PLATFORM_VLAN_MAX_EGRESS  64
-
 #define __NMPlatformObject_COMMON \
 	int ifindex; \
 	;
@@ -144,10 +141,7 @@ struct _NMPlatformLink {
 	guint32 vlan_ingress_map[8]; /* VLAN_PRIO_MAX + 1 */
 
 	/* rtnl_link_vlan_get_egress_map(), IFLA_VLAN_EGRESS_QOS */
-	/* Limit maximum of egress mappings to have a static array */
-	int vlan_egress_map_size;
-	guint32 vlan_egress_map_from[NM_PLATFORM_VLAN_MAX_EGRESS];
-	guint32 vlan_egress_map_to  [NM_PLATFORM_VLAN_MAX_EGRESS];
+	/* egress priorities are in NMPOjectLink as they are dynamically allocated */
 
 	/* IFF_* flags as u32. Note that ifi_flags in 'struct ifinfomsg' is declared as 'unsigned',
 	 * but libnl stores the flag internally as u32.  */

@@ -154,6 +154,11 @@ typedef struct {
 	struct {
 		GUdevDevice *device;
 	} udev;
+
+	/* rtnl_link_vlan_get_egress_map(), IFLA_VLAN_EGRESS_QOS */
+	int vlan_egress_map_size;
+	guint32 *vlan_egress_map_from;
+	guint32 *vlan_egress_map_to;
 } NMPObjectLink;
 
 typedef struct {

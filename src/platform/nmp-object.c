@@ -207,6 +207,10 @@ static void
 _vt_cmd_obj_dispose_link (NMPObject *obj)
 {
 	g_clear_object (&obj->_link.udev.device);
+
+	obj->_link.vlan_egress_map_size = 0;
+	g_clear_pointer (&obj->_link.vlan_egress_map_from, g_free);
+	g_clear_pointer (&obj->_link.vlan_egress_map_to, g_free);
 }
 
 static NMPObject *
@@ -497,6 +501,14 @@ _vt_cmd_obj_equal_link (const NMPObject *obj1, const NMPObject *obj2)
 		return FALSE;
 	if (obj1->_link.udev.device != obj2->_link.udev.device)
 		return FALSE;
+	if (obj1->_link.vlan_egress_map_size != obj2->_link.vlan_egress_map_size)
+		return FALSE;
+	if (memcmp (obj1->_link.vlan_egress_map_from, obj2->_link.vlan_egress_map_from,
+	            obj1->_link.vlan_egress_map_size * sizeof (guint32)))
+		return FALSE;
+	if (memcmp (obj1->_link.vlan_egress_map_to, obj2->_link.vlan_egress_map_to,
+	            obj1->_link.vlan_egress_map_size * sizeof (guint32)))
+		return FALSE;
 	return TRUE;
 }
 
@@ -566,13 +578,43 @@ _vt_cmd_obj_copy_plain (NMPObject *dst, const NMPObject *src)
 static void
 _vt_cmd_obj_copy_link (NMPObject *dst, const NMPObject *src)
 {
+	int size_orig, size;
+	guint32 *emap_from_orig, *emap_to_orig;
+
 	if (dst->_link.udev.device != src->_link.udev.device) {
 		if (dst->_link.udev.device)
 			g_object_unref (dst->_link.udev.device);
 		if (src->_link.udev.device)
 			g_object_ref (src->_link.udev.device);
 	}
+
+	size = src->_link.vlan_egress_map_size;
+	size_orig = dst->_link.vlan_egress_map_size;
+	emap_from_orig = dst->_link.vlan_egress_map_from;
+	emap_to_orig   = dst->_link.vlan_egress_map_to;
+
+	/* shallow-copy whole link */
 	dst->_link = src->_link;
+
+	/* deep-copy dynamic members */
+	if (size > 0) {
+		if (size_orig < size) {
+			g_free (emap_from_orig);
+			g_free (emap_to_orig);
+			dst->_link.vlan_egress_map_from = g_malloc (size);
+			dst->_link.vlan_egress_map_to = g_malloc (size);
+		} else {
+			dst->_link.vlan_egress_map_from = emap_from_orig;
+			dst->_link.vlan_egress_map_to = emap_to_orig;
+		}
+		memcpy (dst->_link.vlan_egress_map_from, src->_link.vlan_egress_map_from, size);
+	} else {
+		g_free (emap_from_orig);
+		g_free (emap_to_orig);
+		dst->_link.vlan_egress_map_size = 0;
+		dst->_link.vlan_egress_map_from = NULL;
+		dst->_link.vlan_egress_map_to = NULL;
+	}
 }
 
 /* Uses internally nmp_object_copy(), hence it also violates the const
