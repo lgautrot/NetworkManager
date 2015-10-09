@@ -2074,11 +2074,12 @@ NM_BACKPORT_SYMBOL (libnm_1_0_6, NMMetered, nm_device_get_metered, (NMDevice *de
  * Gets the list of neighbors discovered through LLDP.
  *
  * Returns: (element-type NMLldpNeighbor) (transfer none): the #GPtrArray
- * containing #NMLldpNeighbor<!-- -->s.
+ * containing #NMLldpNeighbor<!-- -->s. This is the internal copy used by the
+ * device and must not be modified.
  *
  * Since: 1.2
  **/
-const GPtrArray *
+GPtrArray *
 nm_device_get_lldp_neighbors (NMDevice *device)
 {
        g_return_val_if_fail (NM_IS_DEVICE (device), NULL);

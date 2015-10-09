@@ -131,7 +131,7 @@ const char *         nm_device_get_description       (NMDevice  *device);
 NM_AVAILABLE_IN_1_2
 NMMetered            nm_device_get_metered           (NMDevice  *device);
 NM_AVAILABLE_IN_1_2
-const GPtrArray *    nm_device_get_lldp_neighbors    (NMDevice *device);
+GPtrArray *          nm_device_get_lldp_neighbors    (NMDevice *device);
 char **              nm_device_disambiguate_names    (NMDevice **devices,
                                                       int        num_devices);
 
