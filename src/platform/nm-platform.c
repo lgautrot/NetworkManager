@@ -2806,9 +2806,6 @@ nm_platform_link_cmp (const NMPlatformLink *a, const NMPlatformLink *b)
 	_CMP_FIELD (a, b, vlan_id);
 	_CMP_FIELD (a, b, vlan_flags);
 	_CMP_FIELD_MEMCMP (a, b, vlan_ingress_map);
-	_CMP_FIELD (a, b, vlan_egress_map_size);
-	_CMP_FIELD_MEMCMP_LEN (a, b, vlan_egress_map_from, a->vlan_egress_map_size);
-	_CMP_FIELD_MEMCMP_LEN (a, b, vlan_egress_map_to, a->vlan_egress_map_size);
 	_CMP_FIELD (a, b, flags);
 	_CMP_FIELD (a, b, connected);
 	_CMP_FIELD (a, b, mtu);

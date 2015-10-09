@@ -1050,16 +1050,16 @@ _nmp_vt_cmd_plobj_init_from_nl_link (NMPlatform *platform, NMPlatformObject *_ob
 			e_map = rtnl_link_vlan_get_egress_map (nlo, &e_size);
 			for (i = 0; i_map && i <= VLAN_PRIO_MAX; i++)
 				obj->vlan_ingress_map[i] = i_map[i];
-			if (e_size > NM_PLATFORM_VLAN_MAX_EGRESS) {
-				_LOGT ("warning: VLAN link (%d:%s) contains too many egress priorities. "
-				       "NMPlatform will only use first %d of %d.",
-				        obj->ifindex, name, NM_PLATFORM_VLAN_MAX_EGRESS, e_size);
-				e_size = NM_PLATFORM_VLAN_MAX_EGRESS;
+			if (e_size > obj_priv->vlan_egress_map_size) {
+				obj_priv->vlan_egress_map_from = g_realloc (obj_priv->vlan_egress_map_from,
+				                                            sizeof (guint32) * e_size);
+				obj_priv->vlan_egress_map_to   = g_realloc (obj_priv->vlan_egress_map_to,
+				                                            sizeof (guint32) * e_size);
 			}
-			obj->vlan_egress_map_size = e_size;
+			obj_priv->vlan_egress_map_size = e_size;
 			for (i = 0; e_map && i < e_size; i++) {
-				obj->vlan_egress_map_from[i] = e_map[i].vm_from;
-				obj->vlan_egress_map_to[i] = e_map[i].vm_to;
+				obj_priv->vlan_egress_map_from[i] = e_map[i].vm_from;
+				obj_priv->vlan_egress_map_to[i] = e_map[i].vm_to;
 			}
 		} else if (completed_from_cache) {
 			_lookup_link_cached (platform, obj->ifindex, completed_from_cache, &link_cached);
@@ -3337,11 +3337,11 @@ vlan_get_egress_map (NMPlatform *platform, int ifindex, const guint32 **map_from
 	const NMPObject *obj = cache_lookup_link (platform, ifindex);
 
 	if (obj && map_from)
-		*map_from = (const guint32 *) obj->link.vlan_egress_map_from;
+		*map_from = (const guint32 *) obj->_link.vlan_egress_map_from;
 	if (obj && map_to)
-		*map_to = (const guint32 *) obj->link.vlan_egress_map_to;
+		*map_to = (const guint32 *) obj->_link.vlan_egress_map_to;
 	if (obj && size)
-		*size = obj->link.vlan_egress_map_size;
+		*size = obj->_link.vlan_egress_map_size;
 	return !!obj;
 }
 
