@@ -2535,7 +2535,7 @@ nm_lldp_neighbor_get_attr_names (NMLldpNeighbor *neighbor)
  * nm_lldp_neighbor_get_attr_string_value:
  * @neighbor: the #NMLldpNeighbor
  * @name: the attribute name
- * @out_value: (out) (allow-none) on return, the attribute value
+ * @out_value: (out) (allow-none) (transfer none): on return, the attribute value
  *
  * Gets the string value of attribute with name @name on @neighbor
  *
