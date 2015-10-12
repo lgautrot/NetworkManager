@@ -337,7 +337,7 @@ typedef struct {
 extern const NMPlatformVTableRoute nm_platform_vtable_route_v4;
 extern const NMPlatformVTableRoute nm_platform_vtable_route_v6;
 
-extern char _nm_platform_to_string_buffer[256];
+extern char _nm_platform_to_string_buffer[1024];
 
 typedef struct {
 	int peer;

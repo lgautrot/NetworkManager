@@ -2365,14 +2365,14 @@ _lifetime_summary_to_string (gint32 now, guint32 timestamp, guint32 preferred, g
 	return buf;
 }
 
-char _nm_platform_to_string_buffer[256];
+char _nm_platform_to_string_buffer[1024];
 
 const char *
 nm_platform_link_to_string (const NMPlatformLink *link)
 {
 	char master[20];
 	char parent[20];
-	char str_vlan[16];
+	char *str_vlan = NULL;
 	GString *str_flags;
 	char str_addrmode[30];
 	gs_free char *str_addr = NULL;
@@ -2410,10 +2410,32 @@ nm_platform_link_to_string (const NMPlatformLink *link)
 	else
 		parent[0] = 0;
 
-	if (link->vlan_id)
-		g_snprintf (str_vlan, sizeof (str_vlan), " vlan id %u flags %u", (guint) link->vlan_id, link->vlan_flags);
-	else
-		str_vlan[0] = '\0';
+	if (link->vlan_id) {
+		GString *str_ingress_map  = g_string_new (NULL);
+		GString *str_egress_map  = g_string_new (NULL);
+		int i;
+		const guint32 *egress_map_from;
+		const guint32 *egress_map_to;
+		guint32 size = 0;
+
+		for (i = 0; i < 8; i++) {
+			if (link->vlan_ingress_map[i])
+				g_string_append_printf (str_ingress_map, "%u:%u,", i, link->vlan_ingress_map[i]);
+		}
+		g_string_truncate (str_ingress_map, str_ingress_map->len - 1);
+
+		nm_platform_vlan_get_egress_map (NM_PLATFORM_GET, link->ifindex, &egress_map_from, &egress_map_to, &size);
+		for (i = 0; i < size; i++) {
+			g_string_append_printf (str_egress_map, i == 0 ? "%u:%u" : ",%u:%u",
+			                        egress_map_from[i], egress_map_to[i]);
+		}
+		str_vlan = g_strdup_printf (" vlan id %u flags %u ingress {%s} egress {%s}",
+		                            (guint) link->vlan_id, link->vlan_flags,
+		                            str_ingress_map->str, str_egress_map->str);
+		g_string_free (str_ingress_map, TRUE);
+		g_string_free (str_egress_map, TRUE);
+	} else
+		str_vlan = g_strdup ("");
 
 	if (link->inet6_addr_gen_mode_inv) {
 		switch (_nm_platform_uint8_inv (link->inet6_addr_gen_mode_inv)) {
@@ -2472,6 +2494,7 @@ nm_platform_link_to_string (const NMPlatformLink *link)
 	            link->driver ? " driver " : "",
 	            link->driver ? link->driver : "");
 	g_string_free (str_flags, TRUE);
+	g_free (str_vlan);
 	return _nm_platform_to_string_buffer;
 }
 
