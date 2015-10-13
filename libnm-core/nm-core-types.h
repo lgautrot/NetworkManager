@@ -52,6 +52,7 @@ typedef struct _NMSettingTeam             NMSettingTeam;
 typedef struct _NMSettingTeamPort         NMSettingTeamPort;
 typedef struct _NMSettingVlan             NMSettingVlan;
 typedef struct _NMSettingVpn              NMSettingVpn;
+typedef struct _NMSettingVxlan            NMSettingVxlan;
 typedef struct _NMSettingWimax            NMSettingWimax;
 typedef struct _NMSettingWired            NMSettingWired;
 typedef struct _NMSettingWireless         NMSettingWireless;

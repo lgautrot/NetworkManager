@@ -213,6 +213,7 @@ NMSettingWired *           nm_connection_get_setting_wired             (NMConnec
 NMSettingWireless *        nm_connection_get_setting_wireless          (NMConnection *connection);
 NMSettingWirelessSecurity *nm_connection_get_setting_wireless_security (NMConnection *connection);
 NMSettingVlan *            nm_connection_get_setting_vlan              (NMConnection *connection);
+NMSettingVxlan *           nm_connection_get_setting_vxlan             (NMConnection *connection);
 
 G_END_DECLS
 
