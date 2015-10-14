@@ -523,6 +523,8 @@ typedef struct {
 	                              const NMVlanQosMapping *egress_map,
 	                              gsize n_egress_map);
 
+	gboolean (*vxlan_add) (NMPlatform *, const char *name, NMPlatformLnkVxlan *props, NMPlatformLink *out_link);
+
 	gboolean (*infiniband_partition_add) (NMPlatform *, int parent, int p_key, NMPlatformLink *out_link);
 
 	gboolean    (*wifi_get_capabilities) (NMPlatform *, int ifindex, NMDeviceWifiCapabilities *caps);
@@ -727,6 +729,8 @@ gboolean nm_platform_link_vlan_change (NMPlatform *self,
                                        const NMVlanQosMapping *egress_map,
                                        gsize n_egress_map);
 
+
+NMPlatformError nm_platform_vxlan_add (NMPlatform *self, const char *name, NMPlatformLnkVxlan *props, NMPlatformLink *out_link);
 
 NMPlatformError nm_platform_infiniband_partition_add (NMPlatform *self, int parent, int p_key, NMPlatformLink *out_link);
 gboolean nm_platform_infiniband_get_properties (NMPlatform *self, int ifindex, int *parent, int *p_key, const char **mode);
