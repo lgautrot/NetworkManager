@@ -32,25 +32,25 @@ G_BEGIN_DECLS
 #define NM_IS_DEVICE_VXLAN_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass),  NM_TYPE_DEVICE_VXLAN))
 #define NM_DEVICE_VXLAN_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj),  NM_TYPE_DEVICE_VXLAN, NMDeviceVxlanClass))
 
-#define NM_DEVICE_VXLAN_PARENT       "parent"
-#define NM_DEVICE_VXLAN_ID           "id"
-#define NM_DEVICE_VXLAN_GROUP        "group"
-#define NM_DEVICE_VXLAN_LOCAL        "local"
-#define NM_DEVICE_VXLAN_TOS          "tos"
-#define NM_DEVICE_VXLAN_TTL          "ttl"
-#define NM_DEVICE_VXLAN_LEARNING     "learning"
-#define NM_DEVICE_VXLAN_AGEING       "ageing"
-#define NM_DEVICE_VXLAN_LIMIT        "limit"
-#define NM_DEVICE_VXLAN_DST_PORT     "dst-port"
-#define NM_DEVICE_VXLAN_SRC_PORT_MIN "src-port-min"
-#define NM_DEVICE_VXLAN_SRC_PORT_MAX "src-port-max"
-#define NM_DEVICE_VXLAN_PROXY        "proxy"
-#define NM_DEVICE_VXLAN_RSC          "rsc"
-#define NM_DEVICE_VXLAN_L2MISS       "l2miss"
-#define NM_DEVICE_VXLAN_L3MISS       "l3miss"
+#define NM_DEVICE_VXLAN_PARENT        "parent"
+#define NM_DEVICE_VXLAN_ID            "id"
+#define NM_DEVICE_VXLAN_GROUP         "group"
+#define NM_DEVICE_VXLAN_LOCAL         "local"
+#define NM_DEVICE_VXLAN_TOS           "tos"
+#define NM_DEVICE_VXLAN_TTL           "ttl"
+#define NM_DEVICE_VXLAN_LEARNING      "learning"
+#define NM_DEVICE_VXLAN_AGEING        "ageing"
+#define NM_DEVICE_VXLAN_LIMIT         "limit"
+#define NM_DEVICE_VXLAN_DST_PORT      "dst-port"
+#define NM_DEVICE_VXLAN_SRC_PORT_MIN  "src-port-min"
+#define NM_DEVICE_VXLAN_SRC_PORT_MAX  "src-port-max"
+#define NM_DEVICE_VXLAN_PROXY         "proxy"
+#define NM_DEVICE_VXLAN_RSC           "rsc"
+#define NM_DEVICE_VXLAN_L2MISS        "l2miss"
+#define NM_DEVICE_VXLAN_L3MISS        "l3miss"
 
-typedef NMDeviceGeneric NMDeviceVxlan;
-typedef NMDeviceGenericClass NMDeviceVxlanClass;
+typedef NMDevice NMDeviceVxlan;
+typedef NMDeviceClass NMDeviceVxlanClass;
 
 GType nm_device_vxlan_get_type (void);
 

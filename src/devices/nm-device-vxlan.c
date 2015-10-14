@@ -15,32 +15,37 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
- * Copyright 2013, 2014 Red Hat, Inc.
+ * Copyright 2013 - 2015 Red Hat, Inc.
  */
 
 #include "config.h"
 
 #include <string.h>
 
+#include "nm-default.h"
 #include "nm-device-vxlan.h"
 #include "nm-device-private.h"
-#include "nm-default.h"
 #include "nm-manager.h"
 #include "nm-platform.h"
 #include "nm-utils.h"
 #include "nm-device-factory.h"
+#include "nm-setting-vxlan.h"
+#include "nm-setting-wired.h"
+#include "nm-connection-provider.h"
+#include "nm-activation-request.h"
 
 #include "nmdbus-device-vxlan.h"
 
 #include "nm-device-logging.h"
 _LOG_DECLARE_SELF(NMDeviceVxlan);
 
-G_DEFINE_TYPE (NMDeviceVxlan, nm_device_vxlan, NM_TYPE_DEVICE_GENERIC)
+G_DEFINE_TYPE (NMDeviceVxlan, nm_device_vxlan, NM_TYPE_DEVICE)
 
 #define NM_DEVICE_VXLAN_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_VXLAN, NMDeviceVxlanPrivate))
 
 typedef struct {
 	NMPlatformLnkVxlan props;
+	NMDevice *parent;
 } NMDeviceVxlanPrivate;
 
 enum {
@@ -142,6 +147,271 @@ setup (NMDevice *device, NMPlatformLink *plink)
 	update_properties (device);
 }
 
+static gboolean
+create_and_realize (NMDevice *device,
+                    NMConnection *connection,
+                    NMDevice *parent,
+                    NMPlatformLink *out_plink,
+                    GError **error)
+{
+	const char *iface = nm_device_get_iface (device);
+	NMPlatformError plerr;
+	NMPlatformLnkVxlan props = { };
+	NMSettingVxlan *s_vxlan;
+	const char *str;
+	int ret;
+
+	s_vxlan = nm_connection_get_setting_vxlan (connection);
+	g_assert (s_vxlan);
+	g_assert (out_plink);
+
+	props.id = nm_setting_vxlan_get_id (s_vxlan);
+	if (parent)
+		props.parent_ifindex = nm_device_get_ifindex (parent);
+
+	str = nm_setting_vxlan_get_group (s_vxlan);
+	ret = inet_pton (AF_INET, str, &props.group);
+	if (ret != 1)
+		ret = inet_pton (AF_INET6, str, &props.group6);
+	if (ret != 1)
+		return FALSE;
+
+	str = nm_setting_vxlan_get_local (s_vxlan);
+	if (str) {
+		ret = inet_pton (AF_INET, str, &props.local);
+		if (ret != 1)
+			ret = inet_pton (AF_INET6, str, &props.local6);
+		if (ret != 1)
+			return FALSE;
+	}
+
+	props.src_port_min = nm_setting_vxlan_get_src_port_min (s_vxlan);
+	props.src_port_max = nm_setting_vxlan_get_src_port_max (s_vxlan);
+	props.tos = nm_setting_vxlan_get_tos (s_vxlan);
+	props.ttl = nm_setting_vxlan_get_ttl (s_vxlan);
+	props.ageing = nm_setting_vxlan_get_ageing (s_vxlan);
+	props.l2miss = nm_setting_vxlan_get_l2miss (s_vxlan);
+	props.l3miss = nm_setting_vxlan_get_l3miss (s_vxlan);
+	props.rsc = nm_setting_vxlan_get_rsc (s_vxlan);
+	props.learning = nm_setting_vxlan_get_learning (s_vxlan);
+	props.proxy = nm_setting_vxlan_get_proxy (s_vxlan);
+
+	plerr = nm_platform_vxlan_add (NM_PLATFORM_GET, iface, &props, out_plink);
+	if (plerr != NM_PLATFORM_ERROR_SUCCESS && plerr != NM_PLATFORM_ERROR_EXISTS) {
+		g_set_error (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_CREATION_FAILED,
+		             "Failed to create VXLAN interface '%s' for '%s': %s",
+		             iface,
+		             nm_connection_get_id (connection),
+		             nm_platform_error_to_string (plerr));
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+realize (NMDevice *device, NMPlatformLink *plink, GError **error)
+{
+	g_assert (plink->type == NM_LINK_TYPE_VXLAN);
+
+	update_properties (device);
+
+	return TRUE;
+}
+
+static gboolean
+check_connection_compatible (NMDevice *device, NMConnection *connection)
+{
+	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (device);
+	NMSettingVxlan *s_vxlan;
+	const char *iface;
+
+	if (!NM_DEVICE_CLASS (nm_device_vxlan_parent_class)->check_connection_compatible (device, connection))
+		return FALSE;
+
+	s_vxlan = nm_connection_get_setting_vxlan (connection);
+	if (!s_vxlan)
+		return FALSE;
+
+	update_properties (device);
+
+	if (priv->props.id != nm_setting_vxlan_get_id (s_vxlan))
+		return FALSE;
+
+	iface = nm_connection_get_interface_name (connection);
+	if (iface) {
+		if (g_strcmp0 (nm_device_get_ip_iface (device), iface) != 0)
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+complete_connection (NMDevice *device,
+                     NMConnection *connection,
+                     const char *specific_object,
+                     const GSList *existing_connections,
+                     GError **error)
+{
+	NMSettingVxlan *s_vxlan;
+
+	nm_utils_complete_generic (connection,
+	                           NM_SETTING_VXLAN_SETTING_NAME,
+	                           existing_connections,
+	                           NULL,
+	                           _("VXLAN connection"),
+	                           NULL,
+	                           TRUE);
+
+	s_vxlan = nm_connection_get_setting_vxlan (connection);
+	if (!s_vxlan) {
+		g_set_error_literal (error, NM_DEVICE_ERROR, NM_DEVICE_ERROR_INVALID_CONNECTION,
+		                     "A 'vxlan' setting is required.");
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+static void
+update_connection (NMDevice *device, NMConnection *connection)
+{
+	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (device);
+	NMSettingVxlan *s_vxlan = nm_connection_get_setting_vxlan (connection);
+	NMDevice *parent = NULL;
+	const char *setting_parent, *new_parent;
+
+	update_properties (device);
+
+	if (!s_vxlan) {
+		s_vxlan = (NMSettingVxlan *) nm_setting_vxlan_new ();
+		nm_connection_add_setting (connection, (NMSetting *) s_vxlan);
+	}
+
+	if (priv->props.id != nm_setting_vxlan_get_id (s_vxlan))
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_ID, priv->props.id, NULL);
+
+	if (priv->props.parent_ifindex != NM_PLATFORM_LINK_OTHER_NETNS)
+		parent = nm_manager_get_device_by_ifindex (nm_manager_get (), priv->props.parent_ifindex);
+
+	/* Update parent in the connection; default to parent's interface name */
+	if (parent) {
+		new_parent = nm_device_get_iface (parent);
+		setting_parent = nm_setting_vxlan_get_parent (s_vxlan);
+		if (setting_parent && nm_utils_is_uuid (setting_parent)) {
+			NMConnection *parent_connection;
+
+			/* Don't change a parent specified by UUID if it's still valid */
+			parent_connection = nm_connection_provider_get_connection_by_uuid (nm_connection_provider_get (), setting_parent);
+			if (parent_connection && nm_device_check_connection_compatible (parent, parent_connection))
+				new_parent = NULL;
+		}
+		if (new_parent)
+			g_object_set (s_vxlan, NM_SETTING_VXLAN_PARENT, new_parent, NULL);
+	} else
+		g_object_set (s_vxlan, NM_SETTING_VXLAN_PARENT, NULL, NULL);
+
+	/* Remote address */
+	if (priv->props.group) {
+		const char *remote = nm_setting_vxlan_get_group (s_vxlan);
+		in_addr_t addr = 0;
+
+		if (remote)
+			inet_pton (AF_INET, remote, &addr);
+		if (addr != priv->props.group) {
+			g_object_set (s_vxlan, NM_SETTING_VXLAN_GROUP,
+			              nm_utils_inet4_ntop (priv->props.group, NULL),
+			              NULL);
+		}
+	} else if (memcmp (&priv->props.group6, &in6addr_any, sizeof (in6addr_any))) {
+		const char *remote = nm_setting_vxlan_get_group (s_vxlan);
+		struct in6_addr addr = { };
+
+		if (remote)
+			inet_pton (AF_INET6, remote, &addr);
+		if (memcmp (&addr, &priv->props.group6, sizeof (addr))) {
+			g_object_set (s_vxlan, NM_SETTING_VXLAN_GROUP,
+			              nm_utils_inet6_ntop (&priv->props.group6, NULL),
+			              NULL);
+		}
+	}
+
+	/* Local address */
+	if (priv->props.local) {
+		const char *local = nm_setting_vxlan_get_local (s_vxlan);
+		in_addr_t addr = 0;
+
+		if (local)
+			inet_pton (AF_INET, local, &addr);
+		if (addr != priv->props.local) {
+			g_object_set (s_vxlan, NM_SETTING_VXLAN_LOCAL,
+			              nm_utils_inet4_ntop (priv->props.local, NULL),
+			              NULL);
+		}
+	} else if (memcmp (&priv->props.local6, &in6addr_any, sizeof (in6addr_any))) {
+		const char *local = nm_setting_vxlan_get_local (s_vxlan);
+		struct in6_addr addr = { };
+
+		if (local)
+			inet_pton (AF_INET6, local, &addr);
+		if (memcmp (&addr, &priv->props.local6, sizeof (addr))) {
+			g_object_set (s_vxlan, NM_SETTING_VXLAN_LOCAL,
+			              nm_utils_inet6_ntop (&priv->props.local6, NULL),
+			              NULL);
+		}
+	}
+
+	if (priv->props.src_port_min != nm_setting_vxlan_get_src_port_min (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_SRC_PORT_MIN,
+		              priv->props.src_port_min, NULL);
+	}
+
+	if (priv->props.src_port_max != nm_setting_vxlan_get_src_port_max (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_SRC_PORT_MAX,
+		              priv->props.src_port_max, NULL);
+	}
+
+	if (priv->props.tos != nm_setting_vxlan_get_tos (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_TOS,
+		              priv->props.tos, NULL);
+	}
+
+	if (priv->props.ttl != nm_setting_vxlan_get_ttl (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_TTL,
+		              priv->props.ttl, NULL);
+	}
+
+	if (priv->props.learning != nm_setting_vxlan_get_learning (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_LEARNING,
+		              priv->props.learning, NULL);
+	}
+
+	if (priv->props.ageing != nm_setting_vxlan_get_ageing (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_AGEING,
+		              priv->props.ageing, NULL);
+	}
+
+	if (priv->props.proxy != nm_setting_vxlan_get_proxy (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_PROXY,
+		              priv->props.proxy, NULL);
+	}
+
+	if (priv->props.rsc != nm_setting_vxlan_get_rsc (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_RSC,
+		              priv->props.rsc, NULL);
+	}
+
+	if (priv->props.l2miss != nm_setting_vxlan_get_l2miss (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_L2MISS,
+		              priv->props.l2miss, NULL);
+	}
+
+	if (priv->props.l3miss != nm_setting_vxlan_get_l3miss (s_vxlan)) {
+		g_object_set (G_OBJECT (s_vxlan), NM_SETTING_VXLAN_L3MISS,
+		              priv->props.l3miss, NULL);
+	}
+}
 
 /**************************************************************/
 
@@ -231,6 +501,12 @@ nm_device_vxlan_class_init (NMDeviceVxlanClass *klass)
 
 	device_class->link_changed = link_changed;
 	device_class->setup = setup;
+	device_class->connection_type = NM_SETTING_VXLAN_SETTING_NAME;
+	device_class->create_and_realize = create_and_realize;
+	device_class->realize = realize;
+	device_class->check_connection_compatible = check_connection_compatible;
+	device_class->complete_connection = complete_connection;
+	device_class->update_connection = update_connection;
 
 	/* properties */
 	g_object_class_install_property
@@ -365,12 +641,66 @@ create_device (NMDeviceFactory *factory,
 	return (NMDevice *) g_object_new (NM_TYPE_DEVICE_VXLAN,
 	                                  NM_DEVICE_IFACE, iface,
 	                                  NM_DEVICE_TYPE_DESC, "Vxlan",
-	                                  NM_DEVICE_DEVICE_TYPE, NM_DEVICE_TYPE_GENERIC,
+	                                  NM_DEVICE_DEVICE_TYPE, NM_DEVICE_TYPE_VXLAN,
 	                                  NULL);
 }
 
+static const char *
+get_connection_parent (NMDeviceFactory *factory, NMConnection *connection)
+{
+	NMSettingVxlan *s_vxlan;
+	NMSettingWired *s_wired;
+	const char *parent = NULL;
+
+	g_return_val_if_fail (nm_connection_is_type (connection, NM_SETTING_VXLAN_SETTING_NAME), NULL);
+
+	s_vxlan = nm_connection_get_setting_vxlan (connection);
+	g_assert (s_vxlan);
+
+	parent = nm_setting_vxlan_get_parent (s_vxlan);
+	if (parent)
+		return parent;
+
+	/* Try the hardware address from the VXLAN connection's hardware setting */
+	s_wired = nm_connection_get_setting_wired (connection);
+	if (s_wired)
+		return nm_setting_wired_get_mac_address (s_wired);
+
+	return NULL;
+}
+
+static char *
+get_virtual_iface_name (NMDeviceFactory *factory,
+                        NMConnection *connection,
+                        const char *parent_iface)
+{
+	const char *ifname;
+	NMSettingVxlan *s_vxlan;
+
+	g_return_val_if_fail (nm_connection_is_type (connection, NM_SETTING_VXLAN_SETTING_NAME), NULL);
+
+	s_vxlan = nm_connection_get_setting_vxlan (connection);
+	g_assert (s_vxlan);
+
+	ifname = nm_connection_get_interface_name (connection);
+	if (ifname)
+		return g_strdup (ifname);
+
+	if (!parent_iface)
+		return NULL;
+
+	/* If the connection doesn't specify the interface name for the VXLAN
+	 * device, we create one for it using the VXLAN ID and the parent
+	 * interface's name.
+	 */
+	return g_strdup_printf ("%s.%d", parent_iface, nm_setting_vxlan_get_id (s_vxlan));
+}
+
 NM_DEVICE_FACTORY_DEFINE_INTERNAL (VXLAN, Vxlan, vxlan,
-	NM_DEVICE_FACTORY_DECLARE_LINK_TYPES (NM_LINK_TYPE_VXLAN),
+	NM_DEVICE_FACTORY_DECLARE_LINK_TYPES (NM_LINK_TYPE_VXLAN)
+	NM_DEVICE_FACTORY_DECLARE_SETTING_TYPES (NM_SETTING_VXLAN_SETTING_NAME),
 	factory_iface->create_device = create_device;
+	factory_iface->get_connection_parent = get_connection_parent;
+	factory_iface->get_virtual_iface_name = get_virtual_iface_name;
 	)
 
