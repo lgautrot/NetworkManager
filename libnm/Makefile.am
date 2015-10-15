@@ -42,6 +42,7 @@ libnminclude_hfiles =			\
 	nm-device-olpc-mesh.h		\
 	nm-device-team.h		\
 	nm-device-vlan.h		\
+	nm-device-vxlan.h		\
 	nm-device-wifi.h		\
 	nm-device-wimax.h		\
 	nm-device.h			\
@@ -93,6 +94,7 @@ libnm_la_csources =			\
 	nm-device-olpc-mesh.c		\
 	nm-device-team.c		\
 	nm-device-vlan.c		\
+	nm-device-vxlan.c		\
 	nm-device-wifi.c		\
 	nm-device-wimax.c		\
 	nm-device.c			\

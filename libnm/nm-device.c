@@ -40,6 +40,7 @@
 #include "nm-device-team.h"
 #include "nm-device-bridge.h"
 #include "nm-device-vlan.h"
+#include "nm-device-vxlan.h"
 #include "nm-device-generic.h"
 #include "nm-device.h"
 #include "nm-device-private.h"
@@ -362,6 +363,8 @@ _nm_device_gtype_from_dtype (NMDeviceType dtype)
 		return NM_TYPE_DEVICE_VLAN;
 	case NM_DEVICE_TYPE_GENERIC:
 		return NM_TYPE_DEVICE_GENERIC;
+	case NM_DEVICE_TYPE_VXLAN:
+		return NM_TYPE_DEVICE_VXLAN;
 	default:
 		g_warning ("Unknown device type %d", dtype);
 		return G_TYPE_INVALID;
