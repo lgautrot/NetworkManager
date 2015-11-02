@@ -4493,8 +4493,10 @@ linklocal6_complete (NMDevice *self)
 		}
 	} else if (strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_LINK_LOCAL) == 0)
 		nm_device_activate_schedule_ip6_config_result (self);
+	else if (strcmp (method, NM_SETTING_IP6_CONFIG_METHOD_SHARED) == 0)
+		_LOGD (LOGD_DEVICE, "linklocal6_complete: 'shared' method is not supported for IPv6");
 	else
-		g_return_if_fail (FALSE);
+		g_return_if_reached ();
 }
 
 static void
