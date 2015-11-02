@@ -162,6 +162,14 @@
       </tp:docstring>
     </property>
 
+    <method name="Reapply">
+      <annotation name="org.freedesktop.DBus.GLib.CSymbol" value="impl_device_reapply"/>
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <tp:docstring>
+        Attempts to update device with changes to the currently active connection made since it was last applied.
+      </tp:docstring>
+    </method>
+
     <method name="Disconnect">
       <tp:docstring>
         Disconnects a device and prevents the device from automatically activating further connections without user intervention.

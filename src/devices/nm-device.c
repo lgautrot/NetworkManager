@@ -6473,6 +6473,104 @@ delete_on_deactivate_check_and_schedule (NMDevice *self, int ifindex)
 	       ifindex, data->idle_add_id);
 }
 
+static gboolean
+nm_device_reapply_connection (NMDevice *self, gboolean reconfigure, GError **error)
+{
+	NMSettingsConnection *connection = nm_device_get_settings_connection (self);
+	NMConnection *applied = nm_device_get_applied_connection (self);
+	GHashTable *diffs = NULL;
+	GHashTableIter iter;
+	const char *setting;
+
+	nm_connection_diff (NM_CONNECTION (connection),
+	                    applied,
+	                    NM_SETTING_COMPARE_FLAG_IGNORE_TIMESTAMP,
+	                    &diffs);
+
+	/* Everything set. */
+	if (!diffs)
+		return TRUE;
+
+	g_hash_table_iter_init (&iter, diffs);
+	while (g_hash_table_iter_next (&iter, (gpointer *)&setting, NULL)) {
+		if (NM_DEVICE_GET_CLASS (self)->reapply) {
+			if (!NM_DEVICE_GET_CLASS (self)->reapply (self, setting, reconfigure, error))
+				return FALSE;
+		} else {
+			g_set_error (error,
+			             NM_DEVICE_ERROR,
+			             NM_DEVICE_ERROR_INCOMPATIBLE_CONNECTION,
+			             "Can't reapply changes to '%s' settings",
+			             setting);
+			return FALSE;
+		}
+	}
+
+	if (reconfigure)
+		nm_connection_replace_settings_from_connection (applied, NM_CONNECTION (connection));
+
+	return TRUE;
+}
+
+static void
+reapply_cb (NMDevice *self,
+            GDBusMethodInvocation *context,
+            GError *error,
+            gpointer user_data)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	GError *local = NULL;
+
+	if (error) {
+		g_dbus_method_invocation_return_gerror (context, error);
+		return;
+	}
+
+	/* Authorized */
+	if (priv->state != NM_DEVICE_STATE_ACTIVATED) {
+		local = g_error_new_literal (NM_DEVICE_ERROR,
+		                             NM_DEVICE_ERROR_NOT_ACTIVE,
+		                             "Device is not activated");
+		g_dbus_method_invocation_return_gerror (context, local);
+		g_error_free (local);
+	} else if (!nm_device_reapply_connection (self, FALSE, &local)) {
+		/* The dry-run check failed, pityfully. */
+		g_dbus_method_invocation_return_gerror (context, local);
+		g_error_free (local);
+	} else {
+		nm_device_reapply_connection (self, TRUE, &local);
+		g_dbus_method_invocation_return_value (context, NULL);
+	}
+}
+
+static void
+impl_device_reapply (NMDevice *self, GDBusMethodInvocation *context)
+{
+	NMSettingsConnection *connection;
+	GError *error = NULL;
+
+	if (NM_DEVICE_GET_PRIVATE (self)->act_request == NULL) {
+		error = g_error_new_literal (NM_DEVICE_ERROR,
+		                             NM_DEVICE_ERROR_NOT_ACTIVE,
+		                             "This device is not active");
+		g_dbus_method_invocation_return_gerror (context, error);
+		g_error_free (error);
+		return;
+	}
+
+	connection = nm_device_get_settings_connection (self);
+	g_assert (connection);
+
+	/* Ask the manager to authenticate this request for us */
+	g_signal_emit (self, signals[AUTH_REQUEST], 0,
+	               context,
+	               connection,
+	               NM_AUTH_PERMISSION_NETWORK_CONTROL,
+	               TRUE,
+	               reapply_cb,
+	               NULL);
+}
+
 static void
 disconnect_cb (NMDevice *self,
                GDBusMethodInvocation *context,
@@ -10467,6 +10565,7 @@ nm_device_class_init (NMDeviceClass *klass)
 
 	nm_exported_object_class_add_interface (NM_EXPORTED_OBJECT_CLASS (klass),
 	                                        NMDBUS_TYPE_DEVICE_SKELETON,
+	                                        "Reapply", impl_device_reapply,
 	                                        "Disconnect", impl_device_disconnect,
 	                                        "Delete", impl_device_delete,
 	                                        NULL);

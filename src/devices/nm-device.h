@@ -252,6 +252,11 @@ typedef struct {
 	void                (* ip4_config_pre_commit) (NMDevice *self, NMIP4Config *config);
 	void                (* ip6_config_pre_commit) (NMDevice *self, NMIP6Config *config);
 
+	gboolean            (* reapply) (NMDevice *self,
+	                                 const char *setting,
+	                                 gboolean reconfigure,
+	                                 GError **error);
+
 	/* Async deactivating (in the DEACTIVATING phase) */
 	void            (* deactivate_async)        (NMDevice *self,
 	                                             GCancellable *cancellable,
