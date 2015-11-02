@@ -477,6 +477,7 @@ global:
 	nm_setting_team_port_get_config;
 	nm_setting_team_port_get_type;
 	nm_setting_team_port_new;
+	nm_setting_tun_get_type;
 	nm_setting_to_hash;
 	nm_setting_to_string;
 	nm_setting_update_secrets;
