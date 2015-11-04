@@ -22,54 +22,49 @@
 
 #include <fcntl.h>
 #include <linux/if_tun.h>
-#include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
 #include "nm-default.h"
 #include "nm-lldp-listener.h"
+#include "test-common.h"
 
-#include "nm-test-utils.h"
+typedef struct {
+	int ifindex;
+	int fd;
+	guint8 mac[ETH_ALEN];
+} test_fixture;
 
-static int
-create_tap (char *name, int *out_ifindex, guint8 *out_mac)
+#define TEST_IFNAME "nm-tap-test0"
+
+static void
+fixture_setup (test_fixture *fixture, gconstpointer user_data)
 {
+	const NMPlatformLink *link;
 	struct ifreq ifr = { };
-	int fd, tmp = -1;
+	int fd, s;
 
 	fd = open ("/dev/net/tun", O_RDWR);
-	if (fd < 0)
-		return -1;
+	g_assert (fd >= 0);
 
 	ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
-	strncpy (ifr.ifr_name, name, IFNAMSIZ);
-	if (ioctl (fd, TUNSETIFF, &ifr) < 0)
-		goto out_err;
-
-	*out_ifindex = if_nametoindex (name);
+	strncpy (ifr.ifr_name, TEST_IFNAME, IFNAMSIZ);
+	g_assert (ioctl (fd, TUNSETIFF, &ifr) >= 0);
 
 	/* Bring the interface up */
-	tmp = socket (AF_INET, SOCK_DGRAM, 0);
+	s = socket (AF_INET, SOCK_DGRAM, 0);
+	g_assert (s >= 0);
 	ifr.ifr_flags |= IFF_UP;
-	if (ioctl (tmp, SIOCSIFFLAGS, &ifr) < 0)
-		goto out_err;
+	g_assert (ioctl (s, SIOCSIFFLAGS, &ifr) >= 0);
+	close (s);
 
-	/* Get its MAC address */
-	if (ioctl (tmp, SIOCGIFHWADDR, &ifr) < 0)
-		goto out_err;
-
-	memcpy (out_mac, ifr.ifr_addr.sa_data, ETH_ALEN);
-	close (tmp);
-
-	return fd;
-
-out_err:
-	if (fd >= 0)
-		close (fd);
-	if (tmp >= 0)
-		close (tmp);
-	return -1;
+	nm_platform_process_events (NM_PLATFORM_GET);
+	link = nm_platform_link_get_by_ifname (NM_PLATFORM_GET, TEST_IFNAME);
+	g_assert (link);
+	fixture->ifindex = link->ifindex;
+	fixture->fd = fd;
+	memcpy (fixture->mac, link->addr.data, ETH_ALEN);
 }
 
 typedef struct {
@@ -140,11 +135,9 @@ get_lldp_neighbor_attribute (GVariant *neighbors,
 }
 
 static void
-test_receive_frame (void)
+test_receive_frame (test_fixture *fixture, gconstpointer user_data)
 {
 	NMLldpListener *listener;
-	int fd, ifindex = -1;
-	guint8 mac[ETH_ALEN];
 	GMainLoop *loop;
 	TestInfo info = { };
 	GVariant *neighbors, *attr;
@@ -165,21 +158,17 @@ test_receive_frame (void)
 		0x00, 0x00                              /* End Of LLDPDU */
 	};
 
-	fd = create_tap ("nm-test-tap", &ifindex, mac);
-	g_assert_cmpint (fd, >=, 0);
-	g_assert_cmpint (ifindex, >=, 0);
-
 	listener = nm_lldp_listener_new ();
 	g_assert (listener != NULL);
-	g_assert (nm_lldp_listener_start (listener, ifindex, "nm-test-tap", mac, ETH_ALEN, NULL));
+	g_assert (nm_lldp_listener_start (listener, fixture->ifindex, TEST_IFNAME, fixture->mac, ETH_ALEN, NULL));
 
 	g_signal_connect (listener, "notify::" NM_LLDP_LISTENER_NEIGHBORS,
 	                  (GCallback) lldp_neighbors_changed, &info);
 	loop = g_main_loop_new (NULL, FALSE);
 	g_timeout_add_seconds (1, loop_quit, loop);
 
-	g_assert (write (fd, frame, sizeof (frame)) == sizeof (frame));
-	g_assert (write (fd, frame, sizeof (frame)) == sizeof (frame));
+	g_assert (write (fixture->fd, frame, sizeof (frame)) == sizeof (frame));
+	g_assert (write (fixture->fd, frame, sizeof (frame)) == sizeof (frame));
 
 	g_main_loop_run (loop);
 
@@ -212,24 +201,21 @@ test_receive_frame (void)
 	g_clear_pointer (&loop, g_main_loop_unref);
 }
 
-NMTST_DEFINE ();
-
-int
-main (int argc, char **argv)
+static void
+fixture_teardown (test_fixture *fixture, gconstpointer user_data)
 {
-	nmtst_init_assert_logging (&argc, &argv, "INFO", "DEFAULT");
+	nm_platform_link_delete (NM_PLATFORM_GET, fixture->ifindex);
+}
 
-	if (geteuid () != 0 || getegid () != 0) {
-#ifdef REQUIRE_ROOT_TESTS
-		g_print ("Fail test: requires root privileges (%s)\n", argv[0]);
-		return EXIT_FAILURE;
-#else
-		g_print ("Skipping test: requires root privileges (%s)\n", argv[0]);
-		return g_test_run ();
-#endif
-	}
+void
+init_tests (int *argc, char ***argv)
+{
+	nmtst_init_assert_logging (argc, argv, "WARN", "ALL");
+}
 
-	g_test_add_func ("/lldp/receive_frame", test_receive_frame);
-
-	return g_test_run ();
+void
+setup_tests (void)
+{
+	g_test_add ("/lldp/receive_frame", test_fixture, NULL, fixture_setup,
+	            test_receive_frame, fixture_teardown);
 }
