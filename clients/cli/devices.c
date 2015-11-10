@@ -2941,7 +2941,7 @@ do_device_lldp_list (NmCli *nmc, int argc, char **argv)
 			}
 			ifname = *argv;
 		} else {
-			g_printerr (_("Unknown parameter: %s\n"), *argv);
+			g_string_printf (nmc->return_text, _("Error: unknown parameter: %s"), *argv);
 			nmc->return_value = NMC_RESULT_ERROR_USER_INPUT;
 			goto error;
 		}
