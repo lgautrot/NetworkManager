@@ -165,6 +165,10 @@ typedef struct {
 } NMPObjectLnkGre;
 
 typedef struct {
+	NMPlatformLnkSit _public;
+} NMPObjectLnkSit;
+
+typedef struct {
 	NMPlatformLnkInfiniband _public;
 } NMPObjectLnkInfiniband;
 
@@ -213,6 +217,9 @@ struct _NMPObject {
 
 		NMPlatformLnkGre        lnk_gre;
 		NMPObjectLnkGre         _lnk_gre;
+
+		NMPlatformLnkSit        lnk_sit;
+		NMPObjectLnkSit         _lnk_sit;
 
 		NMPlatformLnkInfiniband lnk_infiniband;
 		NMPObjectLnkInfiniband  _lnk_infiniband;
