@@ -48,14 +48,16 @@ G_BEGIN_DECLS
 
 /**
  * NMSettingTunMode:
+ * @NM_SETTING_TUN_MODE_UNKNOWN: an unknown device type
  * @NM_SETTING_TUN_MODE_TUN: a TUN device
  * @NM_SETTING_TUN_MODE_TAP: a TAP device
  *
  * #NMSettingTunMode values indicate the device type (TUN/TAP)
  */
 typedef enum {
-	NM_SETTING_TUN_MODE_TUN = 0,
-	NM_SETTING_TUN_MODE_TAP = 1,
+	NM_SETTING_TUN_MODE_UNKNOWN    = 0,
+	NM_SETTING_TUN_MODE_TUN        = 1,
+	NM_SETTING_TUN_MODE_TAP        = 2,
 } NMSettingTunMode;
 
 struct _NMSettingTun {
