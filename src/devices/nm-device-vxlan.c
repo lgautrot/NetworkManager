@@ -79,6 +79,7 @@ update_properties (NMDevice *device)
 	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (device);
 	GObject *object = G_OBJECT (device);
 	const NMPlatformLnkVxlan *props;
+	NMDevice *parent;
 
 	props = nm_platform_link_get_lnk_vxlan (NM_PLATFORM_GET, nm_device_get_ifindex (device), NULL);
 	if (!props) {
@@ -88,8 +89,13 @@ update_properties (NMDevice *device)
 
 	g_object_freeze_notify (object);
 
-	if (priv->props.parent_ifindex != props->parent_ifindex)
+	if (priv->props.parent_ifindex != props->parent_ifindex) {
+		g_clear_object (&priv->parent);
+		parent = nm_manager_get_device_by_ifindex (nm_manager_get (), props->parent_ifindex);
+		if (parent)
+			priv->parent = g_object_ref (parent);
 		g_object_notify (object, NM_DEVICE_VXLAN_PARENT);
+	}
 	if (priv->props.id != props->id)
 		g_object_notify (object, NM_DEVICE_VXLAN_ID);
 	if (priv->props.group != props->group)
@@ -220,11 +226,67 @@ realize (NMDevice *device, NMPlatformLink *plink, GError **error)
 }
 
 static gboolean
+match_parent (NMDeviceVxlan *self, const char *parent)
+{
+	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (self);
+
+	g_return_val_if_fail (parent != NULL, FALSE);
+
+	if (!priv->parent)
+		return FALSE;
+
+	if (nm_utils_is_uuid (parent)) {
+		NMActRequest *parent_req;
+		NMConnection *parent_connection;
+
+		/* If the parent is a UUID, the connection matches if our parent
+		 * device has that connection activated.
+		 */
+		parent_req = nm_device_get_act_request (priv->parent);
+		if (!parent_req)
+			return FALSE;
+
+		parent_connection = nm_active_connection_get_applied_connection (NM_ACTIVE_CONNECTION (parent_req));
+		if (!parent_connection)
+			return FALSE;
+
+		if (g_strcmp0 (parent, nm_connection_get_uuid (parent_connection)) != 0)
+			return FALSE;
+	} else {
+		/* interface name */
+		if (g_strcmp0 (parent, nm_device_get_ip_iface (priv->parent)) != 0)
+			return FALSE;
+	}
+
+	return TRUE;
+}
+
+static gboolean
+match_hwaddr (NMDevice *device, NMConnection *connection, gboolean fail_if_no_hwaddr)
+{
+	  NMSettingWired *s_wired;
+	  const char *setting_mac;
+	  const char *device_mac;
+
+	  s_wired = nm_connection_get_setting_wired (connection);
+	  if (!s_wired)
+		  return !fail_if_no_hwaddr;
+
+	  setting_mac = nm_setting_wired_get_mac_address (s_wired);
+	  if (!setting_mac)
+		  return !fail_if_no_hwaddr;
+
+	  device_mac = nm_device_get_hw_address (device);
+
+	  return nm_utils_hwaddr_matches (setting_mac, -1, device_mac, -1);
+}
+
+static gboolean
 check_connection_compatible (NMDevice *device, NMConnection *connection)
 {
 	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (device);
 	NMSettingVxlan *s_vxlan;
-	const char *iface;
+	const char *iface, *parent;
 
 	if (!NM_DEVICE_CLASS (nm_device_vxlan_parent_class)->check_connection_compatible (device, connection))
 		return FALSE;
@@ -234,6 +296,17 @@ check_connection_compatible (NMDevice *device, NMConnection *connection)
 		return FALSE;
 
 	update_properties (device);
+
+	/* Check parent interface; could be an interface name or a UUID */
+	parent = nm_setting_vxlan_get_parent (s_vxlan);
+	if (parent) {
+		if (!match_parent (NM_DEVICE_VXLAN (device), parent))
+			return FALSE;
+	} else {
+		/* Parent could be a MAC address in an NMSettingWired */
+		if (!match_hwaddr (device, connection, FALSE))
+			return FALSE;
+	}
 
 	if (priv->props.id != nm_setting_vxlan_get_id (s_vxlan))
 		return FALSE;
@@ -490,6 +563,15 @@ get_property (GObject *object, guint prop_id,
 }
 
 static void
+dispose (GObject *object)
+{
+	NMDeviceVxlanPrivate *priv = NM_DEVICE_VXLAN_GET_PRIVATE (object);
+
+	g_clear_object (&priv->parent);
+	G_OBJECT_CLASS (nm_device_vxlan_parent_class)->dispose (object);
+}
+
+static void
 nm_device_vxlan_class_init (NMDeviceVxlanClass *klass)
 {
 	GObjectClass *object_class = G_OBJECT_CLASS (klass);
@@ -498,6 +580,7 @@ nm_device_vxlan_class_init (NMDeviceVxlanClass *klass)
 	g_type_class_add_private (klass, sizeof (NMDeviceVxlanPrivate));
 
 	object_class->get_property = get_property;
+	object_class->dispose = dispose;
 
 	device_class->link_changed = link_changed;
 	device_class->setup = setup;
@@ -681,6 +764,9 @@ get_virtual_iface_name (NMDeviceFactory *factory,
 
 	s_vxlan = nm_connection_get_setting_vxlan (connection);
 	g_assert (s_vxlan);
+
+	if (nm_setting_vxlan_get_parent (s_vxlan) && !parent_iface)
+		return NULL;
 
 	ifname = nm_connection_get_interface_name (connection);
 	if (ifname)
