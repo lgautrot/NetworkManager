@@ -69,7 +69,7 @@ enum {
 	PROP_PARENT,
 	PROP_ID,
 	PROP_GROUP,
-	PROP_LOCAL_ADDRESS,
+	PROP_LOCAL,
 	PROP_SRC_PORT_MIN,
 	PROP_SRC_PORT_MAX,
 	PROP_DST_PORT,
@@ -490,7 +490,7 @@ set_property (GObject *object, guint prop_id,
 	case PROP_ID:
 		priv->id = g_value_get_uint (value);
 		break;
-	case PROP_LOCAL_ADDRESS:
+	case PROP_LOCAL:
 		g_free (priv->local);
 		priv->local = g_value_dup_string (value);
 		break;
@@ -554,7 +554,7 @@ get_property (GObject *object, guint prop_id,
 	case PROP_ID:
 		g_value_set_uint (value, priv->id);
 		break;
-	case PROP_LOCAL_ADDRESS:
+	case PROP_LOCAL:
 		g_value_set_string (value, priv->local);
 		break;
 	case PROP_SRC_PORT_MIN:
@@ -670,7 +670,7 @@ nm_setting_vxlan_class_init (NMSettingVxlanClass *setting_class)
 	 * Since: 1.2
 	 **/
 	g_object_class_install_property
-		(object_class, PROP_LOCAL_ADDRESS,
+		(object_class, PROP_LOCAL,
 		 g_param_spec_string (NM_SETTING_VXLAN_LOCAL, "", "",
 		                      NULL,
 		                      G_PARAM_READWRITE |
