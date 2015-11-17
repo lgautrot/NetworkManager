@@ -368,9 +368,9 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 
 	if (!priv->group) {
 		g_set_error_literal (error,
-		             NM_CONNECTION_ERROR,
-		             NM_CONNECTION_ERROR_MISSING_PROPERTY,
-		             _("property is missing"));
+		                     NM_CONNECTION_ERROR,
+		                     NM_CONNECTION_ERROR_MISSING_PROPERTY,
+		                     _("property is missing"));
 		g_prefix_error (error, "%s.%s: ",
 		                NM_SETTING_VXLAN_SETTING_NAME,
 		                NM_SETTING_VXLAN_GROUP);
