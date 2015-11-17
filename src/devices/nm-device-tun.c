@@ -226,6 +226,12 @@ realize (NMDevice *device, NMPlatformLink *plink, GError **error)
 	return TRUE;
 }
 
+static void
+setup (NMDevice *device, NMPlatformLink *plink)
+{
+	NM_DEVICE_CLASS (nm_device_tun_parent_class)->setup (device, plink);
+}
+
 static gboolean
 check_connection_compatible (NMDevice *device, NMConnection *connection)
 {
@@ -349,6 +355,7 @@ nm_device_tun_class_init (NMDeviceTunClass *klass)
 	device_class->check_connection_compatible = check_connection_compatible;
 	device_class->create_and_realize = create_and_realize;
 	device_class->realize = realize;
+	device_class->setup = setup;
 	device_class->update_connection = update_connection;
 
 	/* properties */
