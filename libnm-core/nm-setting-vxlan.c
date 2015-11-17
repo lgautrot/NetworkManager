@@ -407,40 +407,17 @@ verify (NMSetting *setting, NMConnection *connection, GError **error)
 		}
 	}
 
-	if (priv->parent) {
-		if (nm_utils_is_uuid (priv->parent)) {
-			/* If we have an NMSettingConnection:master with slave-type="vxlan",
-			 * then it must be the same UUID.
-			 */
-			if (s_con) {
-				const char *master = NULL, *slave_type = NULL;
-
-				slave_type = nm_setting_connection_get_slave_type (s_con);
-				if (!g_strcmp0 (slave_type, NM_SETTING_VXLAN_SETTING_NAME))
-					master = nm_setting_connection_get_master (s_con);
-
-				if (master && g_strcmp0 (priv->parent, master) != 0) {
-					g_set_error (error,
-					             NM_CONNECTION_ERROR,
-					             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-					             _("'%s' value doesn't match '%s=%s'"),
-					             priv->parent, NM_SETTING_CONNECTION_MASTER, master);
-					g_prefix_error (error, "%s.%s: ", NM_SETTING_VXLAN_SETTING_NAME,
-					                NM_SETTING_VXLAN_PARENT);
-					return FALSE;
-				}
-			}
-		} else if (!nm_utils_iface_valid_name (priv->parent)) {
-			/* parent must be either a UUID or an interface name */
-			g_set_error (error,
-			             NM_CONNECTION_ERROR,
-			             NM_CONNECTION_ERROR_INVALID_PROPERTY,
-			             _("'%s' is neither an UUID nor an interface name"),
-			             priv->parent);
-			g_prefix_error (error, "%s.%s: ", NM_SETTING_VXLAN_SETTING_NAME,
-			                NM_SETTING_VXLAN_PARENT);
-			return FALSE;
-		}
+	if (   priv->parent
+	    && !nm_utils_iface_valid_name (priv->parent)
+	    && !nm_utils_is_uuid (priv->parent)) {
+		g_set_error (error,
+		             NM_CONNECTION_ERROR,
+		             NM_CONNECTION_ERROR_INVALID_PROPERTY,
+		             _("'%s' is neither an UUID nor an interface name"),
+		             priv->parent);
+		g_prefix_error (error, "%s.%s: ", NM_SETTING_VXLAN_SETTING_NAME,
+		                NM_SETTING_VXLAN_PARENT);
+		return FALSE;
 	}
 
 	/* In order to assign a name to the interface we need 'connection.interface-name'
