@@ -36,6 +36,7 @@ G_BEGIN_DECLS
 #define NM_IS_DEVICE_TUN_CLASS(klass) (G_TYPE_CHECK_CLASS_TYPE ((klass), NM_TYPE_DEVICE_TUN))
 #define NM_DEVICE_TUN_GET_CLASS(obj)  (G_TYPE_INSTANCE_GET_CLASS ((obj), NM_TYPE_DEVICE_TUN, NMDeviceTunClass))
 
+#define NM_DEVICE_TUN_HW_ADDRESS   "hw-address"
 #define NM_DEVICE_TUN_OWNER        "owner"
 #define NM_DEVICE_TUN_GROUP        "group"
 #define NM_DEVICE_TUN_MODE         "mode"
@@ -57,6 +58,8 @@ typedef struct {
 NM_AVAILABLE_IN_1_2
 GType nm_device_tun_get_type (void);
 
+NM_AVAILABLE_IN_1_2
+const char * nm_device_tun_get_hw_address  (NMDeviceTun *device);
 NM_AVAILABLE_IN_1_2
 const char * nm_device_tun_get_mode        (NMDeviceTun *device);
 NM_AVAILABLE_IN_1_2

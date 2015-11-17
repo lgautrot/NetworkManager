@@ -37,6 +37,7 @@ G_DEFINE_TYPE (NMDeviceTun, nm_device_tun, NM_TYPE_DEVICE)
 #define NM_DEVICE_TUN_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), NM_TYPE_DEVICE_TUN, NMDeviceTunPrivate))
 
 typedef struct {
+	char *hw_address;
 	char *mode;
 	gint64 owner;
 	gint64 group;
@@ -47,6 +48,7 @@ typedef struct {
 
 enum {
 	PROP_0,
+	PROP_HW_ADDRESS,
 	PROP_MODE,
 	PROP_OWNER,
 	PROP_GROUP,
@@ -56,6 +58,25 @@ enum {
 
 	LAST_PROP
 };
+
+/**
+ * nm_device_tun_get_hw_address:
+ * @device: a #NMDeviceTun
+ *
+ * Gets the hardware (MAC) address of the #NMDeviceTun
+ *
+ * Returns: the hardware address. This is the internal string used by the
+ * device, and must not be modified.
+ *
+ * Since: 1.2
+ **/
+const char *
+nm_device_tun_get_hw_address (NMDeviceTun *device)
+{
+	g_return_val_if_fail (NM_IS_DEVICE_TUN (device), NULL);
+
+	return NM_DEVICE_TUN_GET_PRIVATE (device)->hw_address;
+}
 
 /**
  * nm_device_tun_get_mode:
@@ -208,6 +229,12 @@ get_setting_type (NMDevice *device)
 	return NM_TYPE_SETTING_TUN;
 }
 
+static const char *
+get_hw_address (NMDevice *device)
+{
+	return nm_device_tun_get_hw_address (NM_DEVICE_TUN (device));
+}
+
 /***********************************************************/
 
 static void
@@ -221,6 +248,7 @@ init_dbus (NMObject *object)
 {
 	NMDeviceTunPrivate *priv = NM_DEVICE_TUN_GET_PRIVATE (object);
 	const NMPropertiesInfo property_info[] = {
+		{ NM_DEVICE_TUN_HW_ADDRESS,  &priv->hw_address },
 		{ NM_DEVICE_TUN_MODE,        &priv->mode },
 		{ NM_DEVICE_TUN_OWNER,       &priv->owner },
 		{ NM_DEVICE_TUN_GROUP,       &priv->group },
@@ -256,6 +284,9 @@ get_property (GObject *object,
 	NMDeviceTun *device = NM_DEVICE_TUN (object);
 
 	switch (prop_id) {
+	case PROP_HW_ADDRESS:
+		g_value_set_string (value, nm_device_tun_get_hw_address (device));
+		break;
 	case PROP_MODE:
 		g_value_set_string (value, nm_device_tun_get_mode (device));
 		break;
@@ -300,8 +331,23 @@ nm_device_tun_class_init (NMDeviceTunClass *gre_class)
 
 	device_class->connection_compatible = connection_compatible;
 	device_class->get_setting_type = get_setting_type;
+	device_class->get_hw_address = get_hw_address;
 
 	/* properties */
+
+	/**
+	 * NMDeviceTun:hw-address:
+	 *
+	 * The hardware (MAC) address of the device.
+	 *
+	 * Since: 1.2
+	 **/
+	g_object_class_install_property
+		(object_class, PROP_HW_ADDRESS,
+		 g_param_spec_string (NM_DEVICE_TUN_HW_ADDRESS, "", "",
+		                      NULL,
+		                      G_PARAM_READABLE |
+		                      G_PARAM_STATIC_STRINGS));
 
 	/**
 	 * NMDeviceTun:mode:
