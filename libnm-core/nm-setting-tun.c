@@ -321,6 +321,7 @@ nm_setting_tun_class_init (NMSettingTunClass *setting_class)
 		 g_param_spec_uint (NM_SETTING_TUN_MODE, "", "",
 		                    0, G_MAXUINT, NM_SETTING_TUN_MODE_TUN,
 		                    G_PARAM_READWRITE |
+		                    G_PARAM_CONSTRUCT |
 		                    NM_SETTING_PARAM_INFERRABLE |
 		                    G_PARAM_STATIC_STRINGS));
 
