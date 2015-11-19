@@ -4289,7 +4289,7 @@ do_questionnaire_tun (char **user, char **group,
 {
 	gboolean once_more;
 	GError *error = NULL;
-	gboolean bool;
+	gboolean b;
 
 	if (!*user) {
 		do {
@@ -4323,7 +4323,7 @@ do_questionnaire_tun (char **user, char **group,
 			*pi = nmc_readline (_("Enable PI %s"), prompt_yes_no (FALSE, ":"));
 			*pi = *pi ? *pi : g_strdup ("no");
 			normalize_yes_no (pi);
-			once_more = !nmc_string_to_bool (*pi, &bool, &error);
+			once_more = !nmc_string_to_bool (*pi, &b, &error);
 			if (once_more) {
 				g_print (_("Error: 'pi': %s.\n"), error->message);
 				g_clear_error (&error);
@@ -4336,7 +4336,7 @@ do_questionnaire_tun (char **user, char **group,
 			*vnet_hdr = nmc_readline (_("Enable VNET header %s"), prompt_yes_no (FALSE, ":"));
 			*vnet_hdr = *vnet_hdr ? *vnet_hdr : g_strdup ("no");
 			normalize_yes_no (vnet_hdr);
-			once_more = !nmc_string_to_bool (*vnet_hdr, &bool, &error);
+			once_more = !nmc_string_to_bool (*vnet_hdr, &b, &error);
 			if (once_more) {
 				g_print (_("Error: 'vnet_hdr': %s.\n"), error->message);
 				g_clear_error (&error);
@@ -4349,7 +4349,7 @@ do_questionnaire_tun (char **user, char **group,
 			*multi_queue = nmc_readline (_("Enable multi queue %s"), prompt_yes_no (FALSE, ":"));
 			*multi_queue = *multi_queue ? *multi_queue : g_strdup ("no");
 			normalize_yes_no (multi_queue);
-			once_more = !nmc_string_to_bool (*multi_queue, &bool, &error);
+			once_more = !nmc_string_to_bool (*multi_queue, &b, &error);
 			if (once_more) {
 				g_print (_("Error: 'multi_queue': %s.\n"), error->message);
 				g_clear_error (&error);
