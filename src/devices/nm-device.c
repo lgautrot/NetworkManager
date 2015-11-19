@@ -64,6 +64,7 @@
 #include "nm-lldp-listener.h"
 #include "sd-ipv4ll.h"
 #include "nm-audit-manager.h"
+#include "nm-arping-manager.h"
 
 #include "nm-device-logging.h"
 _LOG_DECLARE_SELF (NMDevice);
@@ -75,6 +76,7 @@ static gboolean ip_config_valid (NMDeviceState state);
 static NMActStageReturn dhcp4_start (NMDevice *self, NMConnection *connection, NMDeviceStateReason *reason);
 static gboolean dhcp6_start (NMDevice *self, gboolean wait_for_ll, NMDeviceStateReason *reason);
 static void nm_device_start_ip_check (NMDevice *self);
+static void stage5_ip4_config_commit_cb (NMDevice *self, gboolean result, NMDeviceStateReason reason);
 
 G_DEFINE_ABSTRACT_TYPE (NMDevice, nm_device, NM_TYPE_EXPORTED_OBJECT)
 
@@ -139,6 +141,7 @@ enum {
 #define PENDING_ACTION_AUTOCONF6 "autoconf6"
 
 typedef void (*ActivationHandleFunc) (NMDevice *self);
+typedef void (*ConfigCommitResultFunc) (NMDevice *self, gboolean result, NMDeviceStateReason reason);
 
 typedef struct {
 	ActivationHandleFunc func;
@@ -274,6 +277,8 @@ typedef struct {
 	NMIP4Config *   dev_ip4_config; /* Config from DHCP, PPP, LLv4, etc */
 	NMIP4Config *   ext_ip4_config; /* Stuff added outside NM */
 	NMIP4Config *   wwan_ip4_config; /* WWAN configuration */
+	NMIP4Config *   composite_ip4_config;
+
 	GSList *        vpn4_configs;   /* VPNs which use this device */
 	struct {
 		gboolean v4_has;
@@ -287,14 +292,16 @@ typedef struct {
 	gboolean v4_commit_first_time;
 	gboolean v6_commit_first_time;
 
+	ConfigCommitResultFunc v4_commit_cb;
+
 	/* DHCPv4 tracking */
 	NMDhcpClient *  dhcp4_client;
 	gulong          dhcp4_state_sigid;
 	NMDhcp4Config * dhcp4_config;
 	guint           dhcp4_restart_id;
 
-	guint           arp_round2_id;
-	PingInfo        gw_ping;
+	NMArpingManager * arping_manager;
+	PingInfo          gw_ping;
 
 	/* dnsmasq stuff for shared connections */
 	NMDnsMasqManager *dnsmasq_manager;
@@ -368,7 +375,7 @@ static gboolean nm_device_set_ip4_config (NMDevice *self,
 static gboolean ip4_config_merge_and_apply (NMDevice *self,
                                             NMIP4Config *config,
                                             gboolean commit,
-                                            NMDeviceStateReason *out_reason);
+                                            ConfigCommitResultFunc commit_cb);
 
 static gboolean nm_device_set_ip6_config (NMDevice *self,
                                           NMIP6Config *config,
@@ -3305,6 +3312,18 @@ ipv4ll_get_ip4_config (NMDevice *self, guint32 lla)
 	return config;
 }
 
+static void
+ipv4ll_merge_cb (NMDevice *self, gboolean result, NMDeviceStateReason reason)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	if (!result) {
+		_LOGE (LOGD_AUTOIP4, "failed to update IP4 config for autoip change.");
+		priv->ip4_state = IP_FAIL;
+		nm_device_check_ip_failed (self, FALSE);
+	}
+}
+
 #define IPV4LL_NETWORK (htonl (0xA9FE0000L))
 #define IPV4LL_NETMASK (htonl (0xFFFF0000L))
 
@@ -3359,11 +3378,7 @@ nm_device_handle_ipv4ll_event (sd_ipv4ll *ll, int event, void *data)
 			nm_clear_g_source (&priv->ipv4ll_timeout);
 			nm_device_activate_schedule_ip4_config_result (self, config);
 		} else if (priv->ip4_state == IP_DONE) {
-			if (!ip4_config_merge_and_apply (self, config, TRUE, NULL)) {
-				_LOGE (LOGD_AUTOIP4, "failed to update IP4 config for autoip change.");
-				priv->ip4_state = IP_FAIL;
-				nm_device_check_ip_failed (self, FALSE);
-			}
+			ip4_config_merge_and_apply (self, config, TRUE, ipv4ll_merge_cb);
 		} else
 			g_assert_not_reached ();
 
@@ -3599,11 +3614,75 @@ _ip4_config_merge_default (gpointer value, gpointer user_data)
 	nm_ip4_config_merge (dst, src, NM_IP_CONFIG_MERGE_DEFAULT);
 }
 
+static void
+arping_manager_dad_terminated (NMArpingManager *arping_manager, NMDevice *self)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	gboolean routes_full_sync, success;
+	const guint32 default_route_metric = nm_device_get_ip4_route_metric (self);
+	NMDeviceStateReason reason;
+	const NMPlatformIP4Address *address;
+	guint num_configured = 0, num_static_failed = 0;
+	int i;
+
+	g_assert (priv->composite_ip4_config);
+
+	for (i = 0; i < nm_ip4_config_get_num_addresses (priv->composite_ip4_config); ) {
+		address = nm_ip4_config_get_address (priv->composite_ip4_config, i);
+		if (address->source == NM_IP_CONFIG_SOURCE_USER) {
+			num_configured++;
+			success = nm_arping_manager_check_address (arping_manager, address->address);
+			if (!success) {
+				nm_ip4_config_del_address (priv->composite_ip4_config, i);
+				num_static_failed++;
+				continue;
+			}
+		} else if (address->source == NM_IP_CONFIG_SOURCE_DHCP) {
+			num_configured++;
+			success = nm_arping_manager_check_address (arping_manager, address->address);
+			if (!success) {
+				_LOGI (LOGD_IP, "DHCP-provided address already in use");
+				reason = NM_DEVICE_STATE_REASON_IP_CONFIG_UNAVAILABLE;
+				goto out;
+			}
+		}
+		i++;
+	}
+
+	if (num_configured && num_static_failed == num_configured) {
+		_LOGI (LOGD_IP4, "all static addresses duplicated");
+		success = FALSE;
+		reason = NM_DEVICE_STATE_REASON_IP_CONFIG_UNAVAILABLE;
+		goto out;
+	}
+
+	if (NM_DEVICE_GET_CLASS (self)->ip4_config_pre_commit)
+		NM_DEVICE_GET_CLASS (self)->ip4_config_pre_commit (self, priv->composite_ip4_config);
+
+	routes_full_sync =    priv->v4_commit_first_time
+	                   && !nm_device_uses_assumed_connection (self);
+
+	success = nm_device_set_ip4_config (self, priv->composite_ip4_config ,
+	                                    default_route_metric, TRUE,
+	                                    routes_full_sync, &reason);
+
+	priv->v4_commit_first_time = FALSE;
+	nm_arping_manager_announce_addresses (arping_manager);
+
+out:
+	g_clear_object (&priv->composite_ip4_config);
+
+	if (priv->v4_commit_cb)
+		priv->v4_commit_cb (self, success, reason);
+
+	priv->v4_commit_cb = NULL;
+}
+
 static gboolean
 ip4_config_merge_and_apply (NMDevice *self,
                             NMIP4Config *config,
                             gboolean commit,
-                            NMDeviceStateReason *out_reason)
+                            ConfigCommitResultFunc commit_cb)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 	NMConnection *connection;
@@ -3613,9 +3692,9 @@ ip4_config_merge_and_apply (NMDevice *self,
 	const guint32 default_route_metric = nm_device_get_ip4_route_metric (self);
 	guint32 gateway;
 	gboolean connection_has_default_route, connection_is_never_default;
-	gboolean routes_full_sync;
 	gboolean ignore_auto_routes = FALSE;
 	gboolean ignore_auto_dns = FALSE;
+	NMSettingIPConfig *s_ip4 = NULL;
 
 	/* Merge all the configs into the composite config */
 	if (config) {
@@ -3626,7 +3705,7 @@ ip4_config_merge_and_apply (NMDevice *self,
 	/* Apply ignore-auto-routes and ignore-auto-dns settings */
 	connection = nm_device_get_applied_connection (self);
 	if (connection) {
-		NMSettingIPConfig *s_ip4 = nm_connection_get_setting_ip4_config (connection);
+		s_ip4 = nm_connection_get_setting_ip4_config (connection);
 
 		if (s_ip4) {
 			ignore_auto_routes = nm_setting_ip_config_get_ignore_auto_routes (s_ip4);
@@ -3757,35 +3836,61 @@ END_ADD_DEFAULT_ROUTE:
 		priv->default_route.v4_has = _device_get_default_route_from_platform (self, AF_INET, (NMPlatformIPRoute *) &priv->default_route.v4);
 	}
 
-	/* Allow setting MTU etc */
 	if (commit) {
-		if (NM_DEVICE_GET_CLASS (self)->ip4_config_pre_commit)
-			NM_DEVICE_GET_CLASS (self)->ip4_config_pre_commit (self, composite);
+		const NMPlatformIP4Address *address;
+		int timeout = -1, i;
+
+		priv->composite_ip4_config = composite;
+		priv->v4_commit_cb = commit_cb;
+		priv->arping_manager = nm_arping_manager_new (nm_device_get_iface (self));
+
+		for (i = 0; i < nm_ip4_config_get_num_addresses (composite); i++) {
+			address = nm_ip4_config_get_address (composite, i);
+			if (address->source == NM_IP_CONFIG_SOURCE_USER)
+				nm_arping_manager_add_address (priv->arping_manager, address->address, TRUE);
+			else if (address->source == NM_IP_CONFIG_SOURCE_DHCP)
+				nm_arping_manager_add_address (priv->arping_manager, address->address, FALSE);
+		}
+
+		if (s_ip4)
+			timeout = nm_setting_ip_config_get_dad_timeout (s_ip4);
+
+		if (timeout == 0) {
+			gs_free char *value = NULL;
+
+			value = nm_config_data_get_connection_default (NM_CONFIG_GET_DATA,
+			                                               "ipv4.dad-timeout", self);
+			/* Use 3 seconds timeout by default */
+			timeout = _nm_utils_ascii_str_to_int64 (value, 10, -1, NM_SETTING_IP_CONFIG_DAD_TIMEOUT_MAX, 3);
+			timeout = timeout == 0 ? 3 : timeout;
+		}
+
+		if (timeout > 0) {
+			g_signal_connect (priv->arping_manager, NM_ARPING_MANAGER_DAD_TERMINATED,
+			                  G_CALLBACK (arping_manager_dad_terminated),
+			                  self);
+
+			nm_arping_manager_start (priv->arping_manager, timeout, NULL);
+		} else
+			arping_manager_dad_terminated (priv->arping_manager, self);
+	} else {
+		success = nm_device_set_ip4_config (self, composite, default_route_metric, FALSE, FALSE, NULL);
+		g_object_unref (composite);
+
+		return success;
 	}
 
-	routes_full_sync =    commit
-	                   && priv->v4_commit_first_time
-	                   && !nm_device_uses_assumed_connection (self);
-
-	success = nm_device_set_ip4_config (self, composite, default_route_metric, commit, routes_full_sync, out_reason);
-	g_object_unref (composite);
-
-	if (commit)
-		priv->v4_commit_first_time = FALSE;
-	return success;
+	return TRUE;
 }
 
 static void
-dhcp4_lease_change (NMDevice *self, NMIP4Config *config)
+dhcp4_lease_change_cb (NMDevice *self, gboolean result, NMDeviceStateReason reason)
 {
-	NMDeviceStateReason reason = NM_DEVICE_STATE_REASON_NONE;
-
-	g_return_if_fail (config != NULL);
-
-	if (!ip4_config_merge_and_apply (self, config, TRUE, &reason)) {
+	if (!result) {
 		_LOGW (LOGD_DHCP4, "failed to update IPv4 config for DHCP change.");
 		nm_device_state_changed (self, NM_DEVICE_STATE_FAILED, reason);
 	} else {
+		nm_device_update_metered (self);
 		/* Notify dispatcher scripts of new DHCP4 config */
 		nm_dispatcher_call (DISPATCHER_ACTION_DHCP4_CHANGE,
 		                    nm_device_get_settings_connection (self),
@@ -3884,10 +3989,8 @@ dhcp4_state_changed (NMDhcpClient *client,
 
 		if (priv->ip4_state == IP_CONF)
 			nm_device_activate_schedule_ip4_config_result (self, ip4_config);
-		else if (priv->ip4_state == IP_DONE) {
-			dhcp4_lease_change (self, ip4_config);
-			nm_device_update_metered (self);
-		}
+		else if (priv->ip4_state == IP_DONE)
+			ip4_config_merge_and_apply (self, ip4_config, TRUE, dhcp4_lease_change_cb);
 		break;
 	case NM_DHCP_STATE_TIMEOUT:
 		dhcp4_fail (self, TRUE);
@@ -6048,119 +6151,9 @@ start_sharing (NMDevice *self, NMIP4Config *config)
 }
 
 static void
-send_arps (NMDevice *self, const char *mode_arg)
-{
-	const char *argv[] = { NULL, mode_arg, "-q", "-I", nm_device_get_ip_iface (self), "-c", "1", NULL, NULL };
-	int ip_arg = G_N_ELEMENTS (argv) - 2;
-	NMConnection *connection;
-	NMSettingIPConfig *s_ip4;
-	int i, num;
-	NMIPAddress *addr;
-	GError *error = NULL;
-
-	connection = nm_device_get_applied_connection (self);
-	if (!connection)
-		return;
-	s_ip4 = nm_connection_get_setting_ip4_config (connection);
-	if (!s_ip4)
-		return;
-	num = nm_setting_ip_config_get_num_addresses (s_ip4);
-	if (num == 0)
-		return;
-
-	argv[0] = nm_utils_find_helper ("arping", NULL, NULL);
-	if (!argv[0]) {
-		_LOGW (LOGD_DEVICE | LOGD_IP4, "arping could not be found; no ARPs will be sent");
-		return;
-	}
-
-	for (i = 0; i < num; i++) {
-		gs_free char *tmp_str = NULL;
-		gboolean success;
-
-		addr = nm_setting_ip_config_get_address (s_ip4, i);
-		argv[ip_arg] = nm_ip_address_get_address (addr);
-
-		_LOGD (LOGD_DEVICE | LOGD_IP4,
-		       "arping: run %s", (tmp_str = g_strjoinv (" ", (char **) argv)));
-		success = g_spawn_async (NULL, (char **) argv, NULL,
-		                         G_SPAWN_STDOUT_TO_DEV_NULL | G_SPAWN_STDERR_TO_DEV_NULL,
-		                         NULL, NULL, NULL, &error);
-		if (!success) {
-			_LOGW (LOGD_DEVICE | LOGD_IP4,
-			       "arping: could not send ARP for local address %s: %s",
-			       argv[ip_arg], error->message);
-			g_clear_error (&error);
-		}
-	}
-}
-
-static gboolean
-arp_announce_round2 (gpointer self)
-{
-	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-
-	priv->arp_round2_id = 0;
-
-	if (   priv->state >= NM_DEVICE_STATE_IP_CONFIG
-	    && priv->state <= NM_DEVICE_STATE_ACTIVATED)
-		send_arps (self, "-U");
-
-	return G_SOURCE_REMOVE;
-}
-
-static void
-arp_cleanup (NMDevice *self)
-{
-	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-
-	if (priv->arp_round2_id) {
-		g_source_remove (priv->arp_round2_id);
-		priv->arp_round2_id = 0;
-	}
-}
-
-static void
-arp_announce (NMDevice *self)
-{
-	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-	NMConnection *connection;
-	NMSettingIPConfig *s_ip4;
-	int num;
-
-	arp_cleanup (self);
-
-	/* We only care about manually-configured addresses; DHCP- and autoip-configured
-	 * ones should already have been seen on the network at this point.
-	 */
-	connection = nm_device_get_applied_connection (self);
-	if (!connection)
-		return;
-	s_ip4 = nm_connection_get_setting_ip4_config (connection);
-	if (!s_ip4)
-		return;
-	num = nm_setting_ip_config_get_num_addresses (s_ip4);
-	if (num == 0)
-		return;
-
-	send_arps (self, "-A");
-	priv->arp_round2_id = g_timeout_add_seconds (2, arp_announce_round2, self);
-}
-
-static void
 activate_stage5_ip4_config_commit (NMDevice *self)
 {
-	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-	NMActRequest *req;
-	const char *method;
-	NMConnection *connection;
-	NMDeviceStateReason reason = NM_DEVICE_STATE_REASON_NONE;
 	int ip_ifindex;
-
-	req = nm_device_get_act_request (self);
-	g_assert (req);
-	connection = nm_act_request_get_applied_connection (req);
-	g_assert (connection);
 
 	/* Interface must be IFF_UP before IP config can be applied */
 	ip_ifindex = nm_device_get_ip_ifindex (self);
@@ -6170,12 +6163,27 @@ activate_stage5_ip4_config_commit (NMDevice *self)
 			_LOGW (LOGD_DEVICE, "interface %s not up for IP configuration", nm_device_get_ip_iface (self));
 	}
 
-	/* NULL to use the existing priv->dev_ip4_config */
-	if (!ip4_config_merge_and_apply (self, NULL, TRUE, &reason)) {
+	ip4_config_merge_and_apply (self, NULL, TRUE, stage5_ip4_config_commit_cb);
+}
+
+static void
+stage5_ip4_config_commit_cb (NMDevice *self, gboolean result, NMDeviceStateReason reason)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+	NMActRequest *req;
+	NMConnection *connection;
+	const char *method;
+
+	if (!result) {
 		_LOGD (LOGD_DEVICE | LOGD_IP4, "Activation: Stage 5 of 5 (IPv4 Commit) failed");
 		nm_device_state_changed (self, NM_DEVICE_STATE_FAILED, reason);
 		return;
 	}
+
+	req = nm_device_get_act_request (self);
+	g_assert (req);
+	connection = nm_act_request_get_applied_connection (req);
+	g_assert (connection);
 
 	/* Start IPv4 sharing if we need it */
 	method = nm_utils_get_ip_config_method (connection, NM_TYPE_SETTING_IP4_CONFIG);
@@ -6203,8 +6211,6 @@ activate_stage5_ip4_config_commit (NMDevice *self)
 		                    NULL,
 		                    NULL);
 	}
-
-	arp_announce (self);
 
 	/* Enter the IP_CHECK state if this is the first method to complete */
 	priv->ip4_state = IP_DONE;
@@ -6951,6 +6957,12 @@ _replace_vpn_config_in_list (GSList **plist, GObject *old, GObject *new)
 	g_return_val_if_fail (!old, FALSE);
 	return FALSE;
 }
+static void
+ip4_commit_cb (NMDevice *self, gboolean result, NMDeviceStateReason reason)
+{
+	if (!result)
+		_LOGW (LOGD_IP4, "failed to set IP4 configuration for device");
+}
 
 void
 nm_device_replace_vpn4_config (NMDevice *self, NMIP4Config *old, NMIP4Config *config)
@@ -6961,8 +6973,7 @@ nm_device_replace_vpn4_config (NMDevice *self, NMIP4Config *old, NMIP4Config *co
 		return;
 
 	/* NULL to use existing configs */
-	if (!ip4_config_merge_and_apply (self, NULL, TRUE, NULL))
-		_LOGW (LOGD_IP4, "failed to set VPN routes for device");
+	ip4_config_merge_and_apply (self, NULL, TRUE, ip4_commit_cb);
 }
 
 void
@@ -6978,8 +6989,7 @@ nm_device_set_wwan_ip4_config (NMDevice *self, NMIP4Config *config)
 		priv->wwan_ip4_config = g_object_ref (config);
 
 	/* NULL to use existing configs */
-	if (!ip4_config_merge_and_apply (self, NULL, TRUE, NULL))
-		_LOGW (LOGD_IP4, "failed to set WWAN IPv4 configuration");
+	ip4_config_merge_and_apply (self, NULL, TRUE, ip4_commit_cb);
 }
 
 static gboolean
@@ -8633,12 +8643,16 @@ _cleanup_ip_pre (NMDevice *self, CleanupType cleanup_type)
 	nm_device_queued_ip_config_change_clear (self);
 
 	dhcp4_cleanup (self, cleanup_type, FALSE);
-	arp_cleanup (self);
 	dhcp6_cleanup (self, cleanup_type, FALSE);
 	linklocal6_cleanup (self);
 	addrconf6_cleanup (self);
 	dnsmasq_cleanup (self);
 	ipv4ll_cleanup (self);
+
+	if (priv->arping_manager) {
+		nm_arping_manager_reset (priv->arping_manager);
+		g_clear_object (&priv->arping_manager);
+	}
 }
 
 static void
