@@ -188,10 +188,12 @@ static const char *
 _device_type_to_interface (NMDeviceType type)
 {
 	switch (type) {
+	case NM_DEVICE_TYPE_GENERIC:
+		return NM_DBUS_INTERFACE_DEVICE_GENERIC;
 	case NM_DEVICE_TYPE_TUN:
 		return NM_DBUS_INTERFACE_DEVICE_TUN;
 	default:
-		return NM_DBUS_INTERFACE_DEVICE_GENERIC;
+		return NULL;
 	}
 }
 
@@ -213,8 +215,10 @@ constructed (GObject *object)
 	type = _nm_device_type_for_path (connection, path);
 	interface = _device_type_to_interface (type);
 
-	priv->proxy = _nm_object_new_proxy (NM_OBJECT (object), NULL, interface);
-	register_properties (NM_DEVICE_GENERIC (object));
+	if (interface) {
+		priv->proxy = _nm_object_new_proxy (NM_OBJECT (object), NULL, interface);
+		register_properties (NM_DEVICE_GENERIC (object));
+	}
 }
 
 static void
