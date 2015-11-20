@@ -1334,6 +1334,19 @@ _new_from_nl_link (NMPlatform *platform, const NMPCache *cache, struct nlmsghdr 
 	                                     &link_cached,
 	                                     &obj->link.kind);
 
+	/* Due to https://bugzilla.redhat.com/show_bug.cgi?id=1284001, the
+	 * first netlink event for a new SIT link may not contain enough
+	 * information to create a object, so we have to fetch the link
+	 * again.
+	 */
+	if (   obj->link.arptype == ARPHRD_SIT
+	    && obj->link.type == NM_LINK_TYPE_UNKNOWN) {
+		if (!nmp_cache_lookup_link_full (cache, 0, obj->link.name, FALSE, NM_LINK_TYPE_SIT, NULL, NULL)) {
+			do_request_link (platform, 0, obj->link.name, TRUE);
+			goto errout;
+		}
+	}
+
 	if (tb[IFLA_MASTER])
 		obj->link.master = nla_get_u32 (tb[IFLA_MASTER]);
 
