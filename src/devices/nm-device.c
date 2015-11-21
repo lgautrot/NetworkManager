@@ -6200,7 +6200,7 @@ activate_stage5_ip4_config_commit (NMDevice *self)
 }
 
 static void
-nm_device_queued_ip_config_change_clear (NMDevice *self)
+nm_device_queued_ip4_config_change_clear (NMDevice *self)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
 
@@ -6209,6 +6209,13 @@ nm_device_queued_ip_config_change_clear (NMDevice *self)
 		g_source_remove (priv->queued_ip4_config_id);
 		priv->queued_ip4_config_id = 0;
 	}
+}
+
+static void
+nm_device_queued_ip6_config_change_clear (NMDevice *self)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
 	if (priv->queued_ip6_config_id) {
 		_LOGD (LOGD_DEVICE, "clearing queued IP6 config change");
 		g_source_remove (priv->queued_ip6_config_id);
@@ -6228,7 +6235,7 @@ nm_device_activate_schedule_ip4_config_result (NMDevice *self, NMIP4Config *conf
 	if (config)
 		priv->dev_ip4_config = g_object_ref (config);
 
-	nm_device_queued_ip_config_change_clear (self);
+	nm_device_queued_ip4_config_change_clear (self);
 	activation_source_schedule (self, activate_stage5_ip4_config_commit, AF_INET);
 }
 
@@ -6472,6 +6479,34 @@ delete_on_deactivate_check_and_schedule (NMDevice *self, int ifindex)
 	_LOGD (LOGD_DEVICE, "delete_on_deactivate: schedule cleanup and delete virtual link #%d (id=%u)",
 	       ifindex, data->idle_add_id);
 }
+
+static void
+_cleanup_ip4_pre (NMDevice *self, CleanupType cleanup_type)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	priv->ip4_state =  IP_NONE;
+	nm_device_queued_ip4_config_change_clear (self);
+
+	dhcp4_cleanup (self, cleanup_type, FALSE);
+	arp_cleanup (self);
+	dnsmasq_cleanup (self);
+	ipv4ll_cleanup (self);
+}
+
+static void
+_cleanup_ip6_pre (NMDevice *self, CleanupType cleanup_type)
+{
+	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
+
+	priv->ip6_state = IP_NONE;
+	nm_device_queued_ip6_config_change_clear (self);
+
+	dhcp6_cleanup (self, cleanup_type, FALSE);
+	linklocal6_cleanup (self);
+	addrconf6_cleanup (self);
+}
+
 
 static gboolean
 nm_device_reapply_connection (NMDevice *self, gboolean reconfigure, GError **error)
@@ -8707,23 +8742,6 @@ nm_device_has_pending_action (NMDevice *self)
 /***********************************************************/
 
 static void
-_cleanup_ip_pre (NMDevice *self, CleanupType cleanup_type)
-{
-	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
-
-	priv->ip4_state = priv->ip6_state = IP_NONE;
-	nm_device_queued_ip_config_change_clear (self);
-
-	dhcp4_cleanup (self, cleanup_type, FALSE);
-	arp_cleanup (self);
-	dhcp6_cleanup (self, cleanup_type, FALSE);
-	linklocal6_cleanup (self);
-	addrconf6_cleanup (self);
-	dnsmasq_cleanup (self);
-	ipv4ll_cleanup (self);
-}
-
-static void
 _cancel_activation (NMDevice *self)
 {
 	NMDevicePrivate *priv = NM_DEVICE_GET_PRIVATE (self);
@@ -8764,7 +8782,8 @@ _cleanup_generic_pre (NMDevice *self, CleanupType cleanup_type)
 	/* Clear any queued transitions */
 	nm_device_queued_state_clear (self);
 
-	_cleanup_ip_pre (self, cleanup_type);
+	_cleanup_ip4_pre (self, cleanup_type);
+	_cleanup_ip6_pre (self, cleanup_type);
 }
 
 static void
@@ -9299,7 +9318,8 @@ _set_state_full (NMDevice *self,
 			/* Clean up any half-done IP operations if the device's layer2
 			 * finds out it needs authentication during IP config.
 			 */
-			_cleanup_ip_pre (self, CLEANUP_TYPE_DECONFIGURE);
+			_cleanup_ip4_pre (self, CLEANUP_TYPE_DECONFIGURE);
+			_cleanup_ip6_pre (self, CLEANUP_TYPE_DECONFIGURE);
 		}
 		break;
 	default:
