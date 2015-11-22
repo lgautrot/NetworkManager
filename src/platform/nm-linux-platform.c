@@ -625,6 +625,8 @@ _linktype_get_type (NMPlatform *platform,
 		return NM_LINK_TYPE_LOOPBACK;
 	else if (arptype == ARPHRD_INFINIBAND)
 		return NM_LINK_TYPE_INFINIBAND;
+	else if (arptype == ARPHRD_SIT)
+		return NM_LINK_TYPE_SIT;
 
 	if (ifname) {
 		gs_free char *driver = NULL;
@@ -1333,19 +1335,6 @@ _new_from_nl_link (NMPlatform *platform, const NMPCache *cache, struct nlmsghdr 
 	                                     completed_from_cache,
 	                                     &link_cached,
 	                                     &obj->link.kind);
-
-	/* Due to https://bugzilla.redhat.com/show_bug.cgi?id=1284001, the
-	 * first netlink event for a new SIT link may not contain enough
-	 * information to create a object, so we have to fetch the link
-	 * again.
-	 */
-	if (   obj->link.arptype == ARPHRD_SIT
-	    && obj->link.type == NM_LINK_TYPE_UNKNOWN) {
-		if (!nmp_cache_lookup_link_full (cache, 0, obj->link.name, FALSE, NM_LINK_TYPE_SIT, NULL, NULL)) {
-			do_request_link (platform, 0, obj->link.name, TRUE);
-			goto errout;
-		}
-	}
 
 	if (tb[IFLA_MASTER])
 		obj->link.master = nla_get_u32 (tb[IFLA_MASTER]);
@@ -2847,6 +2836,31 @@ cache_pre_hook (NMPCache *cache, const NMPObject *old, const NMPObject *new, NMP
 				                         DELAYED_ACTION_TYPE_REFRESH_ALL_IP4_ROUTES |
 				                         DELAYED_ACTION_TYPE_REFRESH_ALL_IP6_ROUTES,
 				                         NULL);
+			}
+		}
+
+		if (   NM_IN_SET (ops_type, NMP_CACHE_OPS_ADDED, NMP_CACHE_OPS_UPDATED)
+		    && new
+		    && new->_link.netlink.is_in_netlink
+		    && !new->_link.netlink.lnk
+		    && (!old || !old->_link.netlink.is_in_netlink))
+		{
+			/* certain link-types also come with a IFLA_INFO_DATA/lnk_data. It may happen that
+			 * kernel didn't send this notification, thus when we first learn about a link
+			 * that lacks an lnk_data we re-request it again. */
+			switch (new->link.type) {
+			case NM_LINK_TYPE_GRE:
+			case NM_LINK_TYPE_INFINIBAND:
+			case NM_LINK_TYPE_MACVLAN:
+			case NM_LINK_TYPE_SIT:
+			case NM_LINK_TYPE_VLAN:
+			case NM_LINK_TYPE_VXLAN:
+				delayed_action_schedule (platform,
+				                         DELAYED_ACTION_TYPE_REFRESH_LINK,
+				                         GINT_TO_POINTER (new->link.ifindex));
+				break;
+			default:
+				break;
 			}
 		}
 		{
