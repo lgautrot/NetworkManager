@@ -18,8 +18,6 @@
 #define VLAN_FLAGS 0
 #define MTU 1357
 
-static int EX = -1;
-
 static void
 test_bogus(void)
 {
@@ -657,6 +655,7 @@ test_software_detect (gconstpointer user_data)
 	const NMPlatformLink *plink;
 	const NMPObject *lnk;
 	guint i_step;
+	const gint EX = -1;
 
 	nmtstp_run_command_check ("ip link add %s type dummy", PARENT_NAME);
 	ifindex_parent = nmtstp_assert_wait_for_link (PARENT_NAME, NM_LINK_TYPE_DUMMY, 100)->ifindex;
@@ -862,8 +861,6 @@ test_software_detect_add (const char *testpath,
                           int test_mode)
 {
 	TestAddSoftwareDetectData *test_data;
-
-	EX = nmtstp_run_command_check_external_global ();
 
 	test_data = g_new0 (TestAddSoftwareDetectData, 1);
 	test_data->link_type = link_type;
