@@ -722,6 +722,8 @@ nmtstp_link_sit_add (gboolean external_command, const char *name, NMPlatformLnkS
 		                                ttl,
 		                                tos,
 		                                lnk->path_mtu_discovery ? "pmtudisc" : "nopmtudisc");
+		if (success)
+			nmtstp_assert_wait_for_link (name, NM_LINK_TYPE_SIT, 100);
 	} else
 		success = nm_platform_link_sit_add (NM_PLATFORM_GET, name, lnk, NULL) == NM_PLATFORM_ERROR_SUCCESS;
 

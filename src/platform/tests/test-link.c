@@ -1444,10 +1444,10 @@ setup_tests (void)
 
 		test_software_detect_add ("/link/software/detect/gre", NM_LINK_TYPE_GRE, 0);
 		test_software_detect_add ("/link/software/detect/macvlan", NM_LINK_TYPE_MACVLAN, 0);
+		test_software_detect_add ("/link/software/detect/sit", NM_LINK_TYPE_SIT, 0);
 		test_software_detect_add ("/link/software/detect/vlan", NM_LINK_TYPE_VLAN, 0);
 		test_software_detect_add ("/link/software/detect/vxlan/0", NM_LINK_TYPE_VXLAN, 0);
 		test_software_detect_add ("/link/software/detect/vxlan/1", NM_LINK_TYPE_VXLAN, 1);
-		test_software_detect_add ("/link/software/detect/sit", NM_LINK_TYPE_SIT, 0);
 
 		g_test_add_func ("/link/software/vlan/set-xgress", test_vlan_set_xgress);
 	}
