@@ -1380,14 +1380,14 @@ _new_from_nl_link (NMPlatform *platform, const NMPCache *cache, struct nlmsghdr 
 	case NM_LINK_TYPE_GRE:
 		lnk_data = _parse_lnk_gre (nl_info_kind, nl_info_data);
 		break;
-	case NM_LINK_TYPE_SIT:
-		lnk_data = _parse_lnk_sit (nl_info_kind, nl_info_data);
-		break;
 	case NM_LINK_TYPE_INFINIBAND:
 		lnk_data = _parse_lnk_infiniband (nl_info_kind, nl_info_data);
 		break;
 	case NM_LINK_TYPE_MACVLAN:
 		lnk_data = _parse_lnk_macvlan (nl_info_kind, nl_info_data);
+		break;
+	case NM_LINK_TYPE_SIT:
+		lnk_data = _parse_lnk_sit (nl_info_kind, nl_info_data);
 		break;
 	case NM_LINK_TYPE_VLAN:
 		lnk_data = _parse_lnk_vlan (nl_info_kind, nl_info_data);

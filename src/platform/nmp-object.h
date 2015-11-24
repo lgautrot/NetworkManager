@@ -165,16 +165,16 @@ typedef struct {
 } NMPObjectLnkGre;
 
 typedef struct {
-	NMPlatformLnkSit _public;
-} NMPObjectLnkSit;
-
-typedef struct {
 	NMPlatformLnkInfiniband _public;
 } NMPObjectLnkInfiniband;
 
 typedef struct {
 	NMPlatformLnkMacvlan _public;
 } NMPObjectLnkMacvlan;
+
+typedef struct {
+	NMPlatformLnkSit _public;
+} NMPObjectLnkSit;
 
 typedef struct {
 	NMPlatformLnkVlan _public;
@@ -218,14 +218,14 @@ struct _NMPObject {
 		NMPlatformLnkGre        lnk_gre;
 		NMPObjectLnkGre         _lnk_gre;
 
-		NMPlatformLnkSit        lnk_sit;
-		NMPObjectLnkSit         _lnk_sit;
-
 		NMPlatformLnkInfiniband lnk_infiniband;
 		NMPObjectLnkInfiniband  _lnk_infiniband;
 
 		NMPlatformLnkMacvlan    lnk_macvlan;
 		NMPObjectLnkMacvlan     _lnk_macvlan;
+
+		NMPlatformLnkSit        lnk_sit;
+		NMPObjectLnkSit         _lnk_sit;
 
 		NMPlatformLnkVlan       lnk_vlan;
 		NMPObjectLnkVlan        _lnk_vlan;
