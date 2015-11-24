@@ -307,7 +307,7 @@ update_connection (NMDevice *device, NMConnection *connection)
 	NMDeviceIPTunnel *self = NM_DEVICE_IP_TUNNEL (device);
 	NMDeviceIPTunnelPrivate *priv = NM_DEVICE_IP_TUNNEL_GET_PRIVATE (self);
 	NMSettingIPTunnel *s_ip_tunnel = nm_connection_get_setting_ip_tunnel (connection);
-	NMDevice *parent;
+	NMDevice *parent = NULL;
 	const char *setting_parent, *new_parent;
 
 	if (!s_ip_tunnel) {
@@ -320,7 +320,7 @@ update_connection (NMDevice *device, NMConnection *connection)
 	if (nm_setting_ip_tunnel_get_mode (s_ip_tunnel) != priv->mode)
 		g_object_set (G_OBJECT (s_ip_tunnel), NM_SETTING_IP_TUNNEL_MODE, priv->mode, NULL);
 
-	if (priv->parent_ifindex != NM_PLATFORM_LINK_OTHER_NETNS)
+	if (priv->parent_ifindex > 0)
 		parent = nm_manager_get_device_by_ifindex (nm_manager_get (), priv->parent_ifindex);
 
 	/* Update parent in the connection; default to parent's interface name */
