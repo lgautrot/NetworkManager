@@ -692,6 +692,8 @@ nmtstp_link_gre_add (gboolean external_command, const char *name, NMPlatformLnkG
 		                                ttl,
 		                                tos,
 		                                lnk->path_mtu_discovery ? "pmtudisc" : "nopmtudisc");
+		if (success)
+			nmtstp_assert_wait_for_link (name, NM_LINK_TYPE_GRE, 100);
 	} else
 		success = nm_platform_link_gre_add (NM_PLATFORM_GET, name, lnk, NULL) == NM_PLATFORM_ERROR_SUCCESS;
 
