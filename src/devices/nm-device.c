@@ -2074,6 +2074,26 @@ nm_device_unrealize (NMDevice *self, gboolean remove_resources, GError **error)
 }
 
 /**
+ * nm_device_notify_new_device_added():
+ * @self: the #NMDevice
+ * @device: the newly added device
+ *
+ * Called by the manager to notify the device that a new device has
+ * been found and added.
+ */
+void
+nm_device_notify_new_device_added (NMDevice *self, NMDevice *device)
+{
+	NMDeviceClass *klass;
+
+	g_return_if_fail (NM_IS_DEVICE (self));
+
+	klass = NM_DEVICE_GET_CLASS (self);
+	if (klass->notify_new_device_added)
+		klass->notify_new_device_added (self, device);
+}
+
+/**
  * nm_device_notify_component_added():
  * @self: the #NMDevice
  * @component: the component being added by a plugin
@@ -2088,8 +2108,13 @@ nm_device_unrealize (NMDevice *self, gboolean remove_resources, GError **error)
 gboolean
 nm_device_notify_component_added (NMDevice *self, GObject *component)
 {
-	if (NM_DEVICE_GET_CLASS (self)->component_added)
-		return NM_DEVICE_GET_CLASS (self)->component_added (self, component);
+	NMDeviceClass *klass;
+
+	g_return_val_if_fail (NM_IS_DEVICE (self), FALSE);
+
+	klass = NM_DEVICE_GET_CLASS (self);
+	if (klass->component_added)
+		return klass->component_added (self, component);
 	return FALSE;
 }
 
