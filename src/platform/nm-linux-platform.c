@@ -2847,7 +2847,9 @@ cache_pre_hook (NMPCache *cache, const NMPObject *old, const NMPObject *new, NMP
 		{
 			/* certain link-types also come with a IFLA_INFO_DATA/lnk_data. It may happen that
 			 * kernel didn't send this notification, thus when we first learn about a link
-			 * that lacks an lnk_data we re-request it again. */
+			 * that lacks an lnk_data we re-request it again.
+			 *
+			 * For example https://bugzilla.redhat.com/show_bug.cgi?id=1284001 */
 			switch (new->link.type) {
 			case NM_LINK_TYPE_GRE:
 			case NM_LINK_TYPE_INFINIBAND:
